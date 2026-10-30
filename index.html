@@ -138,7 +138,7 @@ saveMemory('assistant', answer);
 speak(answer);
 $('state').textContent = 'SISTEMA OPERATIVO';
 } catch (error) {
-addMsg('JARVIS', 'No pude conectar con mi cerebro de inteligencia artificial. Verifica la conexión.');
+addMsg('JARVIS', 'Error detallado: ' + error.message);
 $('state').textContent = 'ERROR DE CONEXIÓN';
 }
 }
