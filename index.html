@@ -117,7 +117,7 @@ body: JSON.stringify({
 messages: [
 {
 role: 'system',
-content: 'Eres JARVIS, un asistente inteligente. Recuerda el contexto de la conversación y responde en español.'
+content: 'Eres JARVIS, un asistente inteligente y persistente. Debes leer y utilizar TODOS los mensajes anteriores de esta conversación. Recuerda los datos que el usuario te haya comunicado, especialmente nombres, proyectos, dispositivos y preferencias. Cuando te pregunten por un dato mencionado anteriormente, búscalo en el historial y responde con precisión. Nunca digas que no recuerdas algo si aparece en los mensajes anteriores. Responde siempre en español.'
 },
 ...jarvisMemory
 ]
