@@ -1,0 +1,35 @@
+# JARVIS para iPad A16 — versión 0.1
+
+## Contenido
+- `index.html`: interfaz de control.
+- `manifest.webmanifest`: configuración de instalación PWA.
+- `service-worker.js`: caché para carga básica sin conexión.
+- `icon.svg`: icono de JARVIS.
+
+## Qué funciona en esta versión
+- Diseño adaptable a iPad.
+- Reloj y fecha local.
+- Paneles de módulos.
+- Entrada de texto y respuestas de demostración.
+- Síntesis de voz si Safari/navegador la admite.
+- Reconocimiento de voz si el navegador expone Web Speech API.
+- Preparación PWA para alojarse por HTTPS.
+
+## Qué NO está conectado todavía
+No hay conexión a OpenAI, n8n, Supabase, calendario ni archivos. Las respuestas son demostrativas. No introduzcas información confidencial.
+
+## Instalación recomendada en iPad
+Para que Safari permita "Añadir a pantalla de inicio" como aplicación web, publica esta carpeta en un alojamiento HTTPS (por ejemplo, GitHub Pages):
+1. Crea o inicia sesión en GitHub.
+2. Crea un repositorio público llamado `jarvis-ipad`.
+3. Sube los cuatro archivos de esta carpeta a la raíz del repositorio.
+4. En Settings > Pages, selecciona Deploy from a branch, rama `main`, carpeta `/root`, y guarda.
+5. Espera a que GitHub Pages publique la dirección HTTPS.
+6. En Safari del iPad abre esa dirección.
+7. Pulsa Compartir > Añadir a pantalla de inicio > Añadir.
+8. Abre el icono JARVIS desde la pantalla de inicio.
+
+La publicación en GitHub Pages puede ser gratuita para un repositorio público. No subas claves API, contraseñas, documentos privados ni datos de pacientes.
+
+## Prueba
+Escribe: "hola JARVIS", "dime la hora", "dime la fecha", "estado del sistema" o "ayuda".
