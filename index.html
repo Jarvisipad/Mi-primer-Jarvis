@@ -100,6 +100,12 @@ JSON.stringify(jarvisMemory)
 const $=id=>document.getElementById(id);
 let voiceOn=true, recognition=null, listening=false;
 function addMsg(who,msg){const el=document.createElement('div');el.className='msg';const b=document.createElement('b');b.textContent=who;const t=document.createElement('div');t.textContent=msg;el.append(b,t);$('log').prepend(el);}
+ jarvisMemory.forEach(m => {
+addMsg(
+m.role === 'user' ? 'USUARIO' : 'JARVIS',
+m.content
+);
+});
 function speak(text){if(!voiceOn||!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='es-CO';u.rate=1;window.speechSynthesis.speak(u);}
 async function respond(text) {
 addMsg('USUARIO', text);
