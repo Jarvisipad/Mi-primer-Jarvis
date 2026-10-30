@@ -104,6 +104,7 @@ function speak(text){if(!voiceOn||!('speechSynthesis' in window))return;window.s
 async function respond(text) {
 addMsg('USUARIO', text);
 saveMemory('user', text);
+console.log('MEMORIA GUARDADA:', localStorage.getItem('jarvisMemory'));
 $('state').textContent = 'CONECTANDO CON JARVIS...';
 try {
 const response = await fetch(
