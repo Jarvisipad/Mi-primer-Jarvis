@@ -350,9 +350,11 @@ async function respond(text) {
 
       headers: {
 
-        'Content-Type': 'application/json'
+       'Content-Type': 'application/json',
 
-      },
+  'X-JARVIS-PASSWORD': jarvisPassword
+
+},
 
       body: JSON.stringify({
 
