@@ -83,82 +83,494 @@ footer{text-align:center;color:#6588a4;font-size:10px;letter-spacing:.1em;paddin
 </main>
 <footer>JARVIS · BUILD 0.1 · IPADOS 26 · PROTOTIPO LOCAL</footer>
 <script>
+
+const WORKER_URL = 'https://jarvis-brain.emiroh29.workers.dev/';
+
+const USER_ID = 'jarvis-primary-user';
+
 let jarvisMemory = JSON.parse(
-localStorage.getItem('jarvisMemory') || '[]'
+
+  localStorage.getItem('jarvisMemory') || '[]'
+
 );
 
-function saveMemory(role, content) {
-jarvisMemory.push({ role, content });
-if (jarvisMemory.length > 30) {
-jarvisMemory = jarvisMemory.slice(-30);
+let voiceOn = true;
+
+let recognition = null;
+
+let listening = false;
+
+let jarvisPassword = sessionStorage.getItem('jarvisPassword');
+
+const $ = id => document.getElementById(id);
+
+function addMsg(who, msg) {
+
+  const el = document.createElement('div');
+
+  el.className = 'msg';
+
+  const b = document.createElement('b');
+
+  b.textContent = who;
+
+  const t = document.createElement('div');
+
+  t.textContent = msg;
+
+  el.append(b, t);
+
+  $('log').prepend(el);
+
 }
-localStorage.setItem(
-'jarvisMemory',
-JSON.stringify(jarvisMemory)
-);
+
+function showMemory() {
+
+  $('log').innerHTML = '';
+
+  jarvisMemory.forEach(m => {
+
+    addMsg(
+
+      m.role === 'user' ? 'USUARIO' : 'JARVIS',
+
+      m.content
+
+    );
+
+  });
+
 }
-const $=id=>document.getElementById(id);
-let voiceOn=true, recognition=null, listening=false;
-function addMsg(who,msg){const el=document.createElement('div');el.className='msg';const b=document.createElement('b');b.textContent=who;const t=document.createElement('div');t.textContent=msg;el.append(b,t);$('log').prepend(el);}
- jarvisMemory.forEach(m => {
-addMsg(
-m.role === 'user' ? 'USUARIO' : 'JARVIS',
-m.content
-);
-});
-function speak(text){if(!voiceOn||!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='es-CO';u.rate=1;window.speechSynthesis.speak(u);}
+
+function localSave(role, content) {
+
+  jarvisMemory.push({ role, content });
+
+  if (jarvisMemory.length > 30) {
+
+    jarvisMemory = jarvisMemory.slice(-30);
+
+  }
+
+  localStorage.setItem(
+
+    'jarvisMemory',
+
+    JSON.stringify(jarvisMemory)
+
+  );
+
+}
+
+async function cloudRequest(body) {
+
+  const response = await fetch(WORKER_URL, {
+
+    method: 'POST',
+
+    headers: {
+
+      'Content-Type': 'application/json',
+
+      'X-JARVIS-PASSWORD': jarvisPassword
+
+    },
+
+    body: JSON.stringify(body)
+
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+
+    throw new Error(data.error || 'Error de memoria en la nube');
+
+  }
+
+  return data;
+
+}
+
+async function saveMemory(role, content) {
+
+  localSave(role, content);
+
+  try {
+
+    await cloudRequest({
+
+      action: 'memory_save',
+
+      userId: USER_ID,
+
+      category: role,
+
+      content: content
+
+    });
+
+  } catch (error) {
+
+    console.error('No se pudo guardar en la nube:', error);
+
+    $('state').textContent = 'MEMORIA LOCAL / NUBE PENDIENTE';
+
+  }
+
+}
+
+async function loadCloudMemory() {
+
+  if (!jarvisPassword) {
+
+    jarvisPassword = prompt('Introduce tu contraseña de JARVIS:');
+
+    if (!jarvisPassword) {
+
+      $('state').textContent = 'CONTRASEÑA NECESARIA PARA MEMORIA';
+
+      return;
+
+    }
+
+    sessionStorage.setItem('jarvisPassword', jarvisPassword);
+
+  }
+
+  try {
+
+    const data = await cloudRequest({
+
+      action: 'memory_get',
+
+      userId: USER_ID
+
+    });
+
+    const cloudMemory = (data.memories || [])
+
+      .reverse()
+
+      .map(item => ({
+
+        role: item.category === 'assistant' ? 'assistant' : 'user',
+
+        content: item.content
+
+      }));
+
+    if (cloudMemory.length === 0 && jarvisMemory.length > 0) {
+
+      const oldMemory = [...jarvisMemory];
+
+      for (const item of oldMemory) {
+
+        await cloudRequest({
+
+          action: 'memory_save',
+
+          userId: USER_ID,
+
+          category: item.role,
+
+          content: item.content
+
+        });
+
+      }
+
+    } else if (cloudMemory.length > 0) {
+
+      jarvisMemory = cloudMemory.slice(-30);
+
+      localStorage.setItem(
+
+        'jarvisMemory',
+
+        JSON.stringify(jarvisMemory)
+
+      );
+
+    }
+
+    showMemory();
+
+    $('state').textContent = 'MEMORIA EN LA NUBE CONECTADA';
+
+    $('connection').textContent = '● JARVIS CONECTADO';
+
+    $('connection').style.color = '#7ef5c2';
+
+  } catch (error) {
+
+    console.error('Error de memoria:', error);
+
+    $('state').textContent = 'MEMORIA EN NUBE NO DISPONIBLE';
+
+    addMsg('JARVIS / SISTEMA',
+
+      'No se pudo conectar la memoria en la nube. La conversación local sigue disponible.');
+
+  }
+
+}
+
+function speak(text) {
+
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+
+  u.lang = 'es-CO';
+
+  u.rate = 1;
+
+  window.speechSynthesis.speak(u);
+
+}
+
 async function respond(text) {
-addMsg('USUARIO', text);
-saveMemory('user', text);
-console.log('MEMORIA GUARDADA:', localStorage.getItem('jarvisMemory'));
-$('state').textContent = 'CONECTANDO CON JARVIS...';
-try {
-const response = await fetch(
-'https://jarvis-brain.emiroh29.workers.dev/',
-{
-method: 'POST',
-headers: {
-'Content-Type': 'application/json'
-},
-body: JSON.stringify({
-messages: [
-{
-role: 'system',
-content: 'Eres JARVIS, un asistente inteligente y persistente. Debes leer y utilizar TODOS los mensajes anteriores de esta conversación. Recuerda los datos que el usuario te haya comunicado, especialmente nombres, proyectos, dispositivos y preferencias. Cuando te pregunten por un dato mencionado anteriormente, búscalo en el historial y responde con precisión. Nunca digas que no recuerdas algo si aparece en los mensajes anteriores. Responde siempre en español.'
-},
-...jarvisMemory
-]
-})
+
+  addMsg('USUARIO', text);
+
+  $('state').textContent = 'CONECTANDO CON JARVIS...';
+
+  try {
+
+    await memoryReady;
+
+    await saveMemory('user', text);
+
+    const response = await fetch(WORKER_URL, {
+
+      method: 'POST',
+
+      headers: {
+
+        'Content-Type': 'application/json'
+
+      },
+
+      body: JSON.stringify({
+
+        messages: [
+
+          {
+
+            role: 'system',
+
+            content: 'Eres JARVIS, un asistente inteligente y persistente. Utiliza los recuerdos y mensajes anteriores que recibas para recordar proyectos, dispositivos, nombres y preferencias. Responde siempre en español.'
+
+          },
+
+          ...jarvisMemory
+
+        ]
+
+      })
+
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+
+      throw new Error(data.error || 'Error de conexión');
+
+    }
+
+    const answer = data.choices[0].message.content;
+
+    addMsg('JARVIS', answer);
+
+    await saveMemory('assistant', answer);
+
+    speak(answer);
+
+    $('state').textContent = 'SISTEMA OPERATIVO';
+
+  } catch (error) {
+
+    addMsg('JARVIS', 'Error: ' + error.message);
+
+    $('state').textContent = 'ERROR DE CONEXIÓN';
+
+  }
+
 }
-);
 
-const data = await response.json();
+const memoryReady = loadCloudMemory();
 
-if (!response.ok) {
-throw new Error(data.error || 'Error de conexión');
+function send() {
+
+  const v = $('command').value.trim();
+
+  if (!v) return;
+
+  $('command').value = '';
+
+  respond(v);
+
 }
 
-const answer = data.choices[0].message.content;
+$('send').addEventListener('click', send);
 
-addMsg('JARVIS', answer);
-saveMemory('assistant', answer);
-speak(answer);
-$('state').textContent = 'SISTEMA OPERATIVO';
-} catch (error) {
-addMsg('JARVIS', 'Error detallado: ' + error.message);
-$('state').textContent = 'ERROR DE CONEXIÓN';
-}
+$('command').addEventListener('keydown', e => {
+
+  if (e.key === 'Enter') send();
+
+});
+
+$('speakToggle').addEventListener('click', () => {
+
+  voiceOn = !voiceOn;
+
+  $('speakToggle').textContent =
+
+    'Voz: ' + (voiceOn ? 'activada' : 'desactivada');
+
+  if (!voiceOn && 'speechSynthesis' in window) {
+
+    window.speechSynthesis.cancel();
+
+  }
+
+});
+
+function updateClock() {
+
+  const d = new Date();
+
+  $('clock').textContent = d.toLocaleTimeString('es-CO', {
+
+    hour: '2-digit',
+
+    minute: '2-digit'
+
+  });
+
+  $('date').textContent = d.toLocaleDateString('es-CO', {
+
+    weekday: 'long',
+
+    day: 'numeric',
+
+    month: 'long',
+
+    year: 'numeric'
+
+  });
+
 }
 
-function send(){const v=$('command').value.trim();if(!v)return;$('command').value='';respond(v);}
-$('send').addEventListener('click',send);$('command').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
-$('speakToggle').addEventListener('click',()=>{voiceOn=!voiceOn;$('speakToggle').textContent='Voz: '+(voiceOn?'activada':'desactivada');if(!voiceOn&&'speechSynthesis'in window)window.speechSynthesis.cancel();});
-function updateClock(){const d=new Date();$('clock').textContent=d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});$('date').textContent=d.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
-updateClock();setInterval(updateClock,15000);
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(SpeechRecognition){recognition=new SpeechRecognition();recognition.lang='es-CO';recognition.interimResults=false;recognition.maxAlternatives=1;recognition.onresult=e=>{const t=e.results[0][0].transcript;$('command').value=t;send();};recognition.onerror=()=>{$('state').textContent='NO SE PUDO CAPTURAR LA VOZ';};recognition.onend=()=>{listening=false;$('core').classList.remove('listening');$('voiceBtn').innerHTML='ACTIVAR<br>JARVIS';};}
-$('voiceBtn').addEventListener('click',()=>{if(!recognition){$('state').textContent='VOZ A TEXTO NO DISPONIBLE EN ESTE NAVEGADOR';addMsg('JARVIS / SISTEMA','La entrada por voz no está disponible en este navegador. Puedes escribir tus órdenes; la respuesta hablada puede funcionar por separado.');return;}if(listening){recognition.stop();return;}try{listening=true;$('core').classList.add('listening');$('voiceBtn').textContent='ESCUCHANDO';$('state').textContent='ESCUCHANDO…';recognition.start();}catch(e){listening=false;$('state').textContent='INTENTA DE NUEVO';}});
-if('serviceWorker'in navigator && location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));}
-if(location.protocol==='file:'){$('connection').textContent='● MODO ARCHIVO';}
+updateClock();
+
+setInterval(updateClock, 15000);
+
+const SpeechRecognition =
+
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+
+  recognition = new SpeechRecognition();
+
+  recognition.lang = 'es-CO';
+
+  recognition.interimResults = false;
+
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = e => {
+
+    const t = e.results[0][0].transcript;
+
+    $('command').value = t;
+
+    send();
+
+  };
+
+  recognition.onerror = () => {
+
+    $('state').textContent = 'NO SE PUDO CAPTURAR LA VOZ';
+
+  };
+
+  recognition.onend = () => {
+
+    listening = false;
+
+    $('core').classList.remove('listening');
+
+    $('voiceBtn').innerHTML = 'ACTIVAR<br>JARVIS';
+
+  };
+
+}
+
+$('voiceBtn').addEventListener('click', () => {
+
+  if (!recognition) {
+
+    $('state').textContent = 'VOZ A TEXTO NO DISPONIBLE';
+
+    return;
+
+  }
+
+  if (listening) {
+
+    recognition.stop();
+
+    return;
+
+  }
+
+  try {
+
+    listening = true;
+
+    $('core').classList.add('listening');
+
+    $('voiceBtn').textContent = 'ESCUCHANDO';
+
+    $('state').textContent = 'ESCUCHANDO...';
+
+    recognition.start();
+
+  } catch (e) {
+
+    listening = false;
+
+    $('state').textContent = 'INTENTA DE NUEVO';
+
+  }
+
+});
+
+if ('serviceWorker' in navigator &&
+
+    location.protocol.startsWith('http')) {
+
+  window.addEventListener('load', () => {
+
+    navigator.serviceWorker.register('./service-worker.js')
+
+      .catch(() => {});
+
+  });
+
+}
+
+if (location.protocol === 'file:') {
+
+  $('connection').textContent = '● MODO ARCHIVO';
+
+}
+
 </script>
 </body></html>
