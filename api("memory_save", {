@@ -360,6 +360,7 @@ let conversation = [];
 let speakingEnabled = true;
 let recognition = null;
 let busy = false;
+let initializing = true;
 
 const $ = id => document.getElementById(id);
 
@@ -458,15 +459,40 @@ async function api(action, extra = {}) {
 /* CONEXIÓN Y MEMORIA */
 async function initialize() {
   try {
-    await api("memory_get");
+ const data = await api("memory_get");
+
+if (Array.isArray(data.messages) && data.messages.length > 0) {
+  conversation = data.messages
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => ({
+      role: m.role,
+      content: m.content
+    }))
+    .slice(-40);
+
+      $("chat").innerHTML = "";
+
+      conversation.forEach(m => {
+        addMessage(m.role, m.content, false);
+      });
+
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(conversation)
+      );
+    }
+
     $("connection").textContent = "● Cloudflare conectado";
-    $("memoryStatus").textContent = "◈ Memoria: disponible";
+    $("memoryStatus").textContent = "◈ Memoria: sincronizada";
     setState("SISTEMA CONECTADO Y OPERATIVO");
+
   } catch (error) {
     $("connection").textContent = "● Revisar conexión";
     $("memoryStatus").textContent = "◈ Memoria: no verificada";
     setState("JARVIS INICIADO · REVISAR CONEXIÓN");
     console.error(error);
+  } finally {
+    initializing = false;
   }
 }
 initialize();
@@ -474,7 +500,7 @@ initialize();
 /* CHAT */
 async function sendMessage() {
   const text = $("command").value.trim();
-  if (!text || busy) return;
+ if (!text || busy || initializing) return;
 
   busy = true;
   $("send").disabled = true;
@@ -597,10 +623,16 @@ async function sendMessage() {
     setState("JARVIS LISTO");
     speak(answer);
 
-    /* GUARDAR HISTORIAL */
-    api("memory_save", {
-      messages: conversation.slice(-20)
-    }).catch(error => console.warn("Memoria:", error));
+/* GUARDAR HISTORIAL */
+try {
+  await api("memory_save", {
+    messages: conversation.slice(-2)
+  });
+  console.log("Conversación sincronizada con Cloudflare.");
+} catch (error) {
+  console.warn("No se pudo sincronizar el historial:", error);
+  setState("RESPUESTA LISTA · SINCRONIZACIÓN PENDIENTE");
+}
 
   } catch (error) {
     addMessage(
@@ -691,14 +723,9 @@ if (SpeechRecognition) {
 }
 
 /* GUARDAR MEMORIA */
-$("remember").addEventListener("click",async () => {
-  try {
-    await api("memory_save",{messages:conversation.slice(-20)});
-    setState("MEMORIA GUARDADA");
-    alert("Solicitud de guardado enviada a JARVIS.");
-  } catch(error) {
-    alert("No se pudo guardar: " + error.message);
-  }
+$("remember").addEventListener("click", () => {
+  setState("MEMORIA AUTOMÁTICA ACTIVA");
+  alert("JARVIS guarda automáticamente cada nuevo intercambio. No necesitas guardar manualmente.");
 });
 
 /* LIMPIEZA LOCAL */
