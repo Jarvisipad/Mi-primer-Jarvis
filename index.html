@@ -454,11 +454,13 @@ async function api(action, extra = {}) {
 
   const response = await fetch(WORKER_URL, {
     method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
+headers: {
+  "Content-Type": "application/json",
+  "X-JARVIS-PASSWORD": password
+},
+body: JSON.stringify({
       action,
       userId:USER_ID,
-      password,
       ...extra
     })
   });
