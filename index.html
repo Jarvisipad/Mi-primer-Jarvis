@@ -475,15 +475,77 @@ async function sendMessage() {
   $("send").disabled = true;
   $("command").value = "";
 
-  addMessage("user",text);
+  addMessage("user", text);
   setState("JARVIS ESTÁ PROCESANDO...");
 
   try {
-    const messages = conversation
-      .slice(-20)
-      .map(m => ({role:m.role,content:m.content}));
 
-    const result = await api("chat",{messages});
+    /* FECHA Y HORA REAL DE COLOMBIA */
+    const currentDateTime = new Intl.DateTimeFormat("es-CO", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: "America/Bogota"
+    }).format(new Date());
+
+    /* EXTRAER RECUERDOS IMPORTANTES */
+    try {
+      await api("facts_extract", {
+        content: text
+      });
+    } catch (error) {
+      console.warn("No se pudo extraer el recuerdo:", error);
+    }
+
+    /* RECUPERAR RECUERDOS GUARDADOS */
+    let facts = [];
+
+    try {
+      const memory = await api("facts_get");
+      facts = Array.isArray(memory.facts)
+        ? memory.facts
+        : [];
+    } catch (error) {
+      console.warn("No se pudieron recuperar los recuerdos:", error);
+    }
+
+    const memoryContext = facts.length
+      ? facts.map(f => "- " + f.content).join("\n")
+      : "Todavía no hay recuerdos guardados.";
+
+    /* CONTEXTO PARA JARVIS */
+    const systemMessage = {
+      role: "system",
+      content:
+        "Eres JARVIS, el asistente personal del usuario. " +
+        "Responde siempre en español, de manera clara y útil.\n\n" +
+
+        "FECHA Y HORA ACTUAL DE COLOMBIA: " +
+        currentDateTime + ".\n" +
+
+        "Utiliza esta fecha y hora cuando te pregunten por ellas. " +
+        "No inventes fechas ni horas.\n\n" +
+
+        "RECUERDOS GUARDADOS DEL USUARIO:\n" +
+        memoryContext + "\n\n" +
+
+        "Utiliza estos recuerdos para personalizar tus respuestas. " +
+        "Si no tienes un dato guardado, reconoce que no lo sabes. " +
+        "Nunca inventes recuerdos."
+    };
+
+    /* PREPARAR CONVERSACIÓN */
+    const messages = [
+      systemMessage,
+      ...conversation.slice(-20).map(m => ({
+        role: m.role,
+        content: m.content
+      }))
+    ];
+
+    /* CONSULTAR GROQ */
+    const result = await api("chat", {
+      messages
+    });
 
     const answer =
       result.reply ||
@@ -493,22 +555,30 @@ async function sendMessage() {
       result.choices?.[0]?.message?.content;
 
     if (!answer) {
-      throw new Error("El servidor respondió, pero no se encontró el texto de respuesta.");
+      throw new Error(
+        "El servidor respondió, pero no se encontró el texto de respuesta."
+      );
     }
 
-    addMessage("assistant",answer);
+    /* MOSTRAR RESPUESTA */
+    addMessage("assistant", answer);
     setState("JARVIS LISTO");
     speak(answer);
 
-    /* Guardado de memoria en el servidor */
-    api("memory_save",{
-      messages:conversation.slice(-20)
-    }).catch(error => console.warn("Memoria:",error));
+    /* GUARDAR HISTORIAL */
+    api("memory_save", {
+      messages: conversation.slice(-20)
+    }).catch(error => console.warn("Memoria:", error));
 
-  } catch(error) {
-    addMessage("assistant","No pude completar la solicitud. " + error.message);
+  } catch (error) {
+    addMessage(
+      "assistant",
+      "No pude completar la solicitud. " + error.message
+    );
+
     setState("ERROR DE COMUNICACIÓN");
     console.error(error);
+
   } finally {
     busy = false;
     $("send").disabled = false;
