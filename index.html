@@ -319,7 +319,41 @@ footer {
       </div>
     </div>
   </section>
+  <div class="panel chat-panel" id="agendaPanel" style="margin-top:15px">
+    <div class="section-title">◷ AGENDA Y TAREAS</div>
 
+    <div style="color:#83b9d1;font-size:12px;margin-bottom:15px">
+      ORGANIZACIÓN PERSONAL
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input id="taskTitle" type="text" placeholder="Nombre de la tarea..." maxlength="200">
+
+      <input id="taskDescription" type="text" placeholder="Descripción de la tarea..." maxlength="2000">
+
+      <label style="color:#83b9d1;font-size:12px">
+        Fecha y hora de vencimiento
+      </label>
+
+      <input id="taskDate" type="datetime-local">
+
+      <button id="createTask">+ CREAR TAREA</button>
+    </div>
+
+    <div class="section-title" style="margin-top:25px">MIS TAREAS</div>
+
+    <div class="controls">
+      <button class="secondary" id="showPending">PENDIENTES</button>
+      <button class="secondary" id="showCompleted">COMPLETADAS</button>
+      <button class="secondary" id="showAll">TODAS</button>
+    </div>
+
+    <div id="taskList" style="margin-top:15px">
+      <div class="status-line">Las tareas aparecerán aquí.</div>
+    </div>
+
+    <div id="taskStatus" style="color:#42eaff;font-size:12px;margin-top:12px"></div>
+  </div>
   <aside class="panel right-panel">
     <div class="section-title">ESTADO DEL ASISTENTE</div>
     <div class="status-line">◈ Inteligencia artificial: activa</div>
@@ -744,7 +778,169 @@ $("forgetLocal").addEventListener("click",() => {
   $("chat").innerHTML = "";
   addMessage("assistant","Historial local eliminado.",false);
 });
+ /* =================================
+   AGENDA Y TAREAS DE JARVIS
+================================= */
 
+let currentTaskFilter = "all";
+
+/* CARGAR TAREAS */
+async function loadTasks(status = "all") {
+  currentTaskFilter = status;
+
+  const list = $("taskList");
+  const statusText = $("taskStatus");
+
+  list.textContent = "Consultando tareas...";
+
+  try {
+    const result = await api("task_list", { status });
+
+    list.innerHTML = "";
+
+    const tasks = Array.isArray(result.tasks)
+      ? result.tasks
+      : [];
+
+    if (tasks.length === 0) {
+      list.textContent = "No hay tareas en esta categoría.";
+      statusText.textContent = "Agenda sincronizada con Cloudflare.";
+      return;
+    }
+
+    tasks.forEach(task => {
+      const card = document.createElement("div");
+      card.className = "status-line";
+      card.style.padding = "14px";
+      card.style.marginBottom = "10px";
+      card.style.border = "1px solid #17628a";
+      card.style.borderRadius = "10px";
+
+      const title = document.createElement("strong");
+      title.textContent = task.title;
+      title.style.color = "#42eaff";
+      card.appendChild(title);
+
+      if (task.description) {
+        const description = document.createElement("p");
+        description.textContent = task.description;
+        card.appendChild(description);
+      }
+
+      if (task.due_at) {
+        const date = document.createElement("p");
+        date.textContent = "Vence: " + task.due_at.replace("T", " ");
+        card.appendChild(date);
+      }
+
+      const state = document.createElement("p");
+      state.textContent = task.status === "completed"
+        ? "Estado: Completada"
+        : "Estado: Pendiente";
+      card.appendChild(state);
+
+      const actions = document.createElement("div");
+      actions.className = "controls";
+
+      if (task.status !== "completed") {
+        const completeButton = document.createElement("button");
+        completeButton.textContent = "COMPLETAR";
+        completeButton.className = "secondary";
+
+        completeButton.addEventListener("click", async () => {
+          try {
+            await api("task_complete", { id: task.id });
+            await loadTasks(currentTaskFilter);
+          } catch (error) {
+            alert("No se pudo completar la tarea: " + error.message);
+          }
+        });
+
+        actions.appendChild(completeButton);
+      }
+
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "ELIMINAR";
+      deleteButton.className = "secondary";
+
+      deleteButton.addEventListener("click", async () => {
+        if (!confirm("¿Deseas eliminar esta tarea?")) return;
+
+        try {
+          await api("task_delete", { id: task.id });
+          await loadTasks(currentTaskFilter);
+        } catch (error) {
+          alert("No se pudo eliminar la tarea: " + error.message);
+        }
+      });
+
+      actions.appendChild(deleteButton);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+
+    statusText.textContent = "Tareas sincronizadas correctamente.";
+
+  } catch (error) {
+    list.textContent = "No se pudieron cargar las tareas.";
+    statusText.textContent = error.message;
+  }
+}
+
+/* CREAR TAREA */
+$("createTask").addEventListener("click", async () => {
+  const title = $("taskTitle").value.trim();
+  const description = $("taskDescription").value.trim();
+  const date = $("taskDate").value;
+
+  if (!title) {
+    alert("Escribe el nombre de la tarea.");
+    $("taskTitle").focus();
+    return;
+  }
+
+  try {
+    $("createTask").disabled = true;
+    $("taskStatus").textContent = "Guardando tarea...";
+
+    await api("task_create", {
+      title,
+      description,
+      due_at: date ? date + ":00" : null,
+      reminder_at: null
+    });
+
+    $("taskTitle").value = "";
+    $("taskDescription").value = "";
+    $("taskDate").value = "";
+
+    await loadTasks("all");
+
+    $("taskStatus").textContent = "Tarea guardada correctamente.";
+
+  } catch (error) {
+    $("taskStatus").textContent = "Error: " + error.message;
+
+  } finally {
+    $("createTask").disabled = false;
+  }
+});
+
+/* FILTROS */
+$("showPending").addEventListener("click", () => {
+  loadTasks("pending");
+});
+
+$("showCompleted").addEventListener("click", () => {
+  loadTasks("completed");
+});
+
+$("showAll").addEventListener("click", () => {
+  loadTasks("all");
+});
+
+/* CARGA INICIAL */
+loadTasks("all");
 </script>
 </body>
 </html>
