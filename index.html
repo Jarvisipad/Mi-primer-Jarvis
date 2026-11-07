@@ -419,6 +419,37 @@ loadHistory();
 /* COMUNICACIÓN CON CLOUDFLARE */
 async function api(action, extra = {}) {
   const password = getPassword();
+
+  if (!password) {
+    throw new Error("Necesitas introducir la contraseña de JARVIS.");
+  }
+
+  const response = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-JARVIS-PASSWORD": password
+    },
+    body: JSON.stringify({
+      action,
+      userId: USER_ID,
+      ...extra
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || data.message || "Error de conexión: " + response.status
+    );
+  }
+
+  if (data.error) throw new Error(data.error);
+
+  return data;
+}
+  const password = getPassword();
   if (!password) throw new Error("Necesitas introducir la contraseña de JARVIS.");
 
   const response = await fetch(WORKER_URL, {
