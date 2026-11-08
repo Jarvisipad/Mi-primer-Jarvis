@@ -337,7 +337,13 @@ footer {
 
       <input id="taskDate" type="datetime-local">
 
-      <button id="createTask">+ CREAR TAREA</button>
+<label style="color:#83b9d1;font-size:12px">
+  Fecha y hora del recordatorio
+</label>
+
+<input id="taskReminder" type="datetime-local">
+
+<button id="createTask">+ CREAR TAREA</button>
     </div>
 
     <div class="section-title" style="margin-top:25px">MIS TAREAS</div>
@@ -832,7 +838,13 @@ async function loadTasks(status = "all") {
         date.textContent = "Vence: " + task.due_at.replace("T", " ");
         card.appendChild(date);
       }
-
+if (task.reminder_at) {
+  const reminder = document.createElement("p");
+  reminder.textContent = "🔔 Recordatorio: " +
+    task.reminder_at.replace("T", " ");
+  reminder.style.color = "#42eaff";
+  card.appendChild(reminder);
+}
       const state = document.createElement("p");
       state.textContent = task.status === "completed"
         ? "Estado: Completada"
@@ -892,10 +904,16 @@ $("createTask").addEventListener("click", async () => {
   const title = $("taskTitle").value.trim();
   const description = $("taskDescription").value.trim();
   const date = $("taskDate").value;
+  const reminder = $("taskReminder").value;
 
   if (!title) {
     alert("Escribe el nombre de la tarea.");
     $("taskTitle").focus();
+    return;
+  }
+
+  if (reminder && new Date(reminder) < new Date()) {
+    alert("El recordatorio debe tener una fecha futura.");
     return;
   }
 
@@ -907,12 +925,13 @@ $("createTask").addEventListener("click", async () => {
       title,
       description,
       due_at: date ? date + ":00" : null,
-      reminder_at: null
+      reminder_at: reminder ? reminder + ":00" : null
     });
 
-    $("taskTitle").value = "";
-    $("taskDescription").value = "";
-    $("taskDate").value = "";
+   $("taskTitle").value = "";
+$("taskDescription").value = "";
+$("taskDate").value = "";
+$("taskReminder").value = "";
 
     await loadTasks("all");
 
