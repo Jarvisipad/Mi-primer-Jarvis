@@ -410,7 +410,21 @@ const USER_ID = "jarvis-primary-user";
 const VAPID_PUBLIC_KEY = "BPboxdh3jYEC8A-IvqcbaYjFnkl81oN1IDyyD4LWAUIFxtNrNzWRQGq5BdyN1dDqHot5rYrD6ZntFVg9dlL4At8";
 const PASSWORD_KEY = "jarvisSessionPassword";
 const HISTORY_KEY = "jarvisConversationV2";
+/* REGISTRO DEL SERVICE WORKER */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register(
+        "./service-worker.js"
+      );
 
+      console.log("JARVIS Service Worker registrado:", registration.scope);
+
+    } catch (error) {
+      console.error("Error registrando Service Worker:", error);
+    }
+  });
+}
 let conversation = [];
 let speakingEnabled = true;
 let recognition = null;
@@ -537,12 +551,21 @@ async function enablePushNotifications() {
       throw new Error("Falta la clave pública VAPID.");
     }
 
+    status.textContent = "Registrando Service Worker...";
+
+    const registration = await navigator.serviceWorker.register(
+      "./service-worker.js"
+    );
+
+    status.textContent = "Esperando Service Worker...";
+
+    await navigator.serviceWorker.ready;
+
     status.textContent = "Verificando permiso...";
 
     let permission = Notification.permission;
 
-status.textContent = "Permiso actual: " + permission;
-console.log("JARVIS permiso:", permission);
+    console.log("JARVIS permiso:", permission);
 
     if (permission !== "granted") {
       permission = await Notification.requestPermission();
@@ -551,12 +574,10 @@ console.log("JARVIS permiso:", permission);
     if (permission !== "granted") {
       throw new Error("No se concedió permiso para notificaciones.");
     }
-status.textContent = "Esperando Service Worker...";
-    const registration = await navigator.serviceWorker.ready;
 
     status.textContent = "Renovando suscripción...";
 
-    let oldSubscription =
+    const oldSubscription =
       await registration.pushManager.getSubscription();
 
     if (oldSubscription) {
@@ -567,6 +588,8 @@ status.textContent = "Esperando Service Worker...";
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
+
+    status.textContent = "Guardando suscripción en Cloudflare...";
 
     await api("push_subscribe", {
       subscription: subscription.toJSON(),
