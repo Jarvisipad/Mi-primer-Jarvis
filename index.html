@@ -551,7 +551,7 @@ console.log("JARVIS permiso:", permission);
     if (permission !== "granted") {
       throw new Error("No se concedió permiso para notificaciones.");
     }
-
+status.textContent = "Esperando Service Worker...";
     const registration = await navigator.serviceWorker.ready;
 
     status.textContent = "Renovando suscripción...";
