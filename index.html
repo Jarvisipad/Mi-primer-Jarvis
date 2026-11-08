@@ -541,6 +541,9 @@ async function enablePushNotifications() {
 
     let permission = Notification.permission;
 
+status.textContent = "Permiso actual: " + permission;
+console.log("JARVIS permiso:", permission);
+
     if (permission !== "granted") {
       permission = await Notification.requestPermission();
     }
