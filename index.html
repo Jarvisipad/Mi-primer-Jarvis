@@ -881,7 +881,6 @@ $("command").addEventListener("keydown",event => {
 function speak(text) {
   if (!speakingEnabled || !("speechSynthesis" in window)) return;
 
-  // Limpiar formato Markdown antes de hablar
   const cleanText = text
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
@@ -890,14 +889,27 @@ function speak(text) {
     .replace(/`/g, "")
     .replace(/\n+/g, ". ");
 
-  speechSynthesis.cancel();
+  window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = "es-CO";
   utterance.rate = 1;
   utterance.pitch = 0.9;
 
-  speechSynthesis.speak(utterance);
+  utterance.onstart = () => {
+    setState("JARVIS HABLANDO...");
+  };
+
+  utterance.onend = () => {
+    setState("JARVIS LISTO");
+  };
+
+  utterance.onerror = (event) => {
+    console.error("Error de voz:", event.error);
+    setState("ERROR DE REPRODUCCIÓN DE VOZ");
+  };
+
+  window.speechSynthesis.speak(utterance);
 }
 $("speak").addEventListener("click",() => {
   speakingEnabled = !speakingEnabled;
