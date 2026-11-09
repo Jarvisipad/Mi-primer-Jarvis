@@ -893,8 +893,25 @@ function speak(text) {
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = "es-CO";
-  utterance.rate = 1;
-  utterance.pitch = 0.9;
+  utterance.rate = 0.92;
+  utterance.pitch = 0.85;
+
+  const voices = window.speechSynthesis.getVoices();
+
+  const isIPad =
+    /iPad/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  if (isIPad) {
+    const carlosVoice = voices.find(voice =>
+      voice.name.toLowerCase().includes("carlos") &&
+      voice.lang.toLowerCase().includes("es")
+    );
+
+    if (carlosVoice) {
+      utterance.voice = carlosVoice;
+    }
+  }
 
   utterance.onstart = () => {
     setState("JARVIS HABLANDO...");
