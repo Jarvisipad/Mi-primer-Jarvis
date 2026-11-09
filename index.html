@@ -559,7 +559,48 @@ async function enablePushNotifications() {
 
     status.textContent = "Esperando Service Worker...";
 
-    await navigator.serviceWorker.ready;
+  await new Promise((resolve, reject) => {
+  const worker =
+    registration.installing ||
+    registration.waiting ||
+    registration.active;
+
+  if (!worker) {
+    reject(new Error("No se encontró el Service Worker."));
+    return;
+  }
+
+  if (worker.state === "activated") {
+    resolve();
+    return;
+  }
+
+  status.textContent =
+    "Estado del Service Worker: " + worker.state;
+
+  const timeout = setTimeout(() => {
+    reject(new Error(
+      "El Service Worker no se activó. Estado: " + worker.state
+    ));
+  }, 15000);
+
+  worker.addEventListener("statechange", () => {
+    status.textContent =
+      "Estado del Service Worker: " + worker.state;
+
+    if (worker.state === "activated") {
+      clearTimeout(timeout);
+      resolve();
+    }
+
+    if (worker.state === "redundant") {
+      clearTimeout(timeout);
+      reject(new Error(
+        "El Service Worker quedó en estado redundant."
+      ));
+    }
+  });
+});
 
     status.textContent = "Verificando permiso...";
 
