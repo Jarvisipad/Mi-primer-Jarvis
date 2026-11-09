@@ -903,10 +903,11 @@ function speak(text) {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   if (isIPad) {
-    const carlosVoice = voices.find(voice =>
-      voice.name.toLowerCase().includes("carlos") &&
-      voice.lang.toLowerCase().includes("es")
-    );
+  const carlosVoice = voices.find(voice =>
+  voice.name.toLowerCase().includes("carlos") &&
+  voice.name.toLowerCase().includes("mejorada") &&
+  voice.lang.toLowerCase().includes("es")
+);
 
     if (carlosVoice) {
       utterance.voice = carlosVoice;
