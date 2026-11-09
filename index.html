@@ -362,7 +362,24 @@ footer {
 
     <div id="taskStatus" style="color:#42eaff;font-size:12px;margin-top:12px"></div>
   </div>
+<div class="panel chat-panel" id="memoryPanel" style="margin-top:15px">
+  <div class="section-title">◈ MEMORIA AVANZADA</div>
 
+  <div style="color:#83b9d1;font-size:12px;margin-bottom:15px">
+    RECUERDOS GUARDADOS DE JARVIS
+  </div>
+
+  <button class="secondary" id="refreshFacts">
+    ACTUALIZAR RECUERDOS
+  </button>
+
+  <div id="factsStatus" style="margin-top:12px;color:#83b9d1">
+    Esperando consulta de memoria...
+  </div>
+
+  <div id="factsList" style="margin-top:15px">
+  </div>
+</div>
   </section>
 
   <aside class="panel right-panel">
@@ -718,7 +735,63 @@ if (Array.isArray(data.messages) && data.messages.length > 0) {
   }
 }
 initialize();
+/* MEMORIA AVANZADA */
 
+async function loadFacts() {
+  const list = $("factsList");
+  const status = $("factsStatus");
+
+  list.textContent = "Consultando recuerdos...";
+  status.textContent = "Conectando con Cloudflare...";
+
+  try {
+    const result = await api("facts_get");
+
+    const facts = Array.isArray(result.facts)
+      ? result.facts
+      : [];
+
+    list.innerHTML = "";
+
+    if (facts.length === 0) {
+      list.textContent = "Todavía no hay recuerdos guardados.";
+      status.textContent = "Memoria sincronizada.";
+      return;
+    }
+
+    facts.forEach(fact => {
+      const card = document.createElement("div");
+      card.className = "status-line";
+      card.style.cssText =
+        "padding:14px;margin-bottom:10px;border:1px solid #17628a;border-radius:10px";
+
+      const category = document.createElement("div");
+      category.textContent =
+        "CATEGORÍA: " + (fact.category || "otro").toUpperCase();
+      category.style.color = "#42eaff";
+      category.style.marginBottom = "8px";
+
+      const content = document.createElement("div");
+      content.textContent = fact.content || "";
+      content.style.color = "#d9f7ff";
+      content.style.fontSize = "14px";
+      content.style.lineHeight = "1.5";
+
+      card.appendChild(category);
+      card.appendChild(content);
+
+      list.appendChild(card);
+    });
+
+    status.textContent =
+      "Recuerdos encontrados: " + facts.length;
+
+  } catch (error) {
+    list.textContent = "No se pudieron consultar los recuerdos.";
+    status.textContent = "Error: " + error.message;
+  }
+}
+$("refreshFacts").addEventListener("click", loadFacts);
 /* CHAT */
 async function sendMessage() {
   const text = $("command").value.trim();
