@@ -920,10 +920,13 @@ if (SpeechRecognition) {
     $("voiceStatus").textContent = "◈ Micrófono: escuchando";
   };
 
-  recognition.onresult = event => {
-    $("command").value = event.results[0][0].transcript;
-    sendMessage();
-  };
+recognition.onresult = async event => {
+  const spokenText = event.results[0][0].transcript;
+
+  $("command").value = spokenText;
+
+  await sendMessage();
+};
 
   recognition.onerror = event => {
     setState("ERROR DE MICRÓFONO: " + event.error);
