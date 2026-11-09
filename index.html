@@ -781,7 +781,66 @@ async function loadFacts() {
 
       card.appendChild(category);
       card.appendChild(content);
+      if (fact.fact_key) {
+        const actions = document.createElement("div");
+        actions.className = "controls";
 
+        const editButton = document.createElement("button");
+        editButton.textContent = "EDITAR";
+        editButton.className = "secondary";
+
+        editButton.addEventListener("click", async () => {
+          const newContent = prompt(
+            "Edita este recuerdo:",
+            fact.content || ""
+          );
+
+          if (newContent === null) return;
+
+          if (!newContent.trim()) {
+            alert("El recuerdo no puede quedar vacío.");
+            return;
+          }
+
+          try {
+            await api("facts_update", {
+              id: fact.id,
+              category: fact.category,
+              content: newContent.trim()
+            });
+
+            await loadFacts();
+          } catch (error) {
+            alert("No se pudo editar: " + error.message);
+          }
+        });
+
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "ELIMINAR";
+        deleteButton.className = "secondary";
+
+        deleteButton.addEventListener("click", async () => {
+          if (!confirm("¿Deseas eliminar este recuerdo?")) return;
+
+          try {
+            await api("facts_delete", { id: fact.id });
+            await loadFacts();
+          } catch (error) {
+            alert("No se pudo eliminar: " + error.message);
+          }
+        });
+
+        actions.appendChild(editButton);
+        actions.appendChild(deleteButton);
+        card.appendChild(actions);
+
+      } else {
+        const note = document.createElement("div");
+        note.textContent = "Recuerdo antiguo · Solo lectura";
+        note.style.color = "#719db5";
+        note.style.marginTop = "10px";
+        card.appendChild(note);
+      }
       list.appendChild(card);
     });
 
