@@ -937,10 +937,39 @@ recognition.onresult = async event => {
     $("voiceStatus").textContent = "◈ Micrófono: disponible";
   };
 
-  $("voice").addEventListener("click",() => {
-    try { recognition.start(); }
-    catch(error) { console.warn(error); }
-  });
+$("voice").addEventListener("click", () => {
+  try {
+    if ("speechSynthesis" in window && speakingEnabled) {
+      speechSynthesis.cancel();
+
+      const unlockVoice = new SpeechSynthesisUtterance("Te escucho.");
+      unlockVoice.lang = "es-CO";
+      unlockVoice.rate = 1;
+
+      unlockVoice.onend = () => {
+        try {
+          recognition.start();
+        } catch (error) {
+          console.warn(error);
+        }
+      };
+
+      unlockVoice.onerror = () => {
+        try {
+          recognition.start();
+        } catch (error) {
+          console.warn(error);
+        }
+      };
+
+      speechSynthesis.speak(unlockVoice);
+    } else {
+      recognition.start();
+    }
+  } catch (error) {
+    console.warn(error);
+  }
+});
 } else {
   $("voice").disabled = true;
   $("voice").textContent = "VOZ NO DISPONIBLE";
