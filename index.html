@@ -769,16 +769,21 @@ async function loadFacts() {
     const facts = Array.isArray(result.facts)
       ? result.facts
       : [];
-
+const selectedCategory = $("factsCategory").value;
+const filteredFacts = selectedCategory === "all"
+  ? facts
+  : facts.filter(fact => (fact.category || "otro") === selectedCategory);
     list.innerHTML = "";
 
-    if (facts.length === 0) {
-      list.textContent = "Todavía no hay recuerdos guardados.";
-      status.textContent = "Memoria sincronizada.";
-      return;
-    }
+if (filteredFacts.length === 0) {
+  list.textContent = facts.length === 0
+    ? "Todavía no hay recuerdos guardados."
+    : "No hay recuerdos en esta categoría.";
+  status.textContent = "Recuerdos encontrados: 0";
+  return;
+}
 
-    facts.forEach(fact => {
+    filteredFacts.forEach(fact => {
       const card = document.createElement("div");
       card.className = "status-line";
       card.style.cssText =
@@ -862,7 +867,7 @@ async function loadFacts() {
     });
 
     status.textContent =
-      "Recuerdos encontrados: " + facts.length;
+      "Recuerdos encontrados: " + filteredFacts.length;
 
   } catch (error) {
     list.textContent = "No se pudieron consultar los recuerdos.";
@@ -870,6 +875,7 @@ async function loadFacts() {
   }
 }
 $("refreshFacts").addEventListener("click", loadFacts);
+$("factsCategory").addEventListener("change", loadFacts);
 /* CHAT */
 async function sendMessage() {
   const text = $("command").value.trim();
