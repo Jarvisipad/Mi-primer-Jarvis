@@ -896,19 +896,20 @@ async function getWeatherAnswer(question) {
   let targetDate = today;
   const q = question.toLowerCase();
 
-  // Reconocer la ciudad. Si no se indica, usar Cali.
-  const cityMatch = q.match(
-    /\ben\s+([a-záéíóúñü]+(?:\s+[a-záéíóúñü]+){0,3})/i
-  );
+  // Reconocer ciudad, municipio y departamento
+const cityMatch = q.match(
+  /\ben\s+(.+?)(?=\s+(?:hoy|mañana|pasado mañana|para hoy|para mañana|el día|este día)|[?.!,]|$)/i
+);
 
-  let city = cityMatch ? cityMatch[1].trim() : "Cali";
+let city = cityMatch ? cityMatch[1].trim() : "Cali";
 
-  city = city.replace(
-    /\s+(?:pasado\s+mañana|mañana|hoy|para|el|este|esta|dentro de).*$/i,
-    ""
-  ).trim();
+// Limpiar palabras que no pertenecen al lugar
+city = city.replace(
+  /\s+(?:por favor|hoy|mañana|pasado mañana)$/i,
+  ""
+).trim();
 
-  if (!city) city = "Cali";
+if (!city) city = "Cali";
 
   // Reconocer fechas relativas
   if (/\bpasado mañana\b/.test(q)) {
