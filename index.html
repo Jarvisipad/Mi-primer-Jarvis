@@ -953,7 +953,20 @@ async function getWeatherAnswer(question) {
 }
 /* CHAT */
 async function sendMessage() {
-  /* CONSULTAR CLIMA ANTES DE ENVIAR A GROQ */
+  const text = $("command").value.trim();
+
+  if (!text || busy || initializing) return;
+
+  busy = true;
+  $("send").disabled = true;
+  $("command").value = "";
+
+  addMessage("user", text);
+  setState("JARVIS ESTÁ PROCESANDO...");
+
+  try {
+
+    /* CONSULTAR CLIMA ANTES DE ENVIAR A GROQ */
     const weatherAnswer = await getWeatherAnswer(text);
 
     if (weatherAnswer) {
@@ -968,18 +981,9 @@ async function sendMessage() {
       } catch (error) {
         console.warn("No se pudo guardar la consulta del clima:", error);
       }
-  const text = $("command").value.trim();
- if (!text || busy || initializing) return;
 
-  busy = true;
-  $("send").disabled = true;
-  $("command").value = "";
-
-  addMessage("user", text);
-  setState("JARVIS ESTÁ PROCESANDO...");
-
-  try {
-
+      return;
+    }
     /* FECHA Y HORA REAL DE COLOMBIA */
     const currentDateTime = new Intl.DateTimeFormat("es-CO", {
       dateStyle: "full",
