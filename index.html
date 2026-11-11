@@ -878,9 +878,16 @@ if (filteredFacts.length === 0) {
 }
 $("refreshFacts").addEventListener("click", loadFacts);
 $("factsCategory").addEventListener("change", loadFacts);
-  /* CONSULTA DEL CLIMA EN CUALQUIER CIUDAD */
+/* CONSULTA DEL CLIMA EN CUALQUIER CIUDAD */
 async function getWeatherAnswer(question) {
- // Obtener la fecha actual de Colombia
+
+  // 1. Detectar si realmente están preguntando por el clima
+  const asksWeather =
+    /\b(clima|tiempo|temperatura|lluvia|pronóstico|pronostico)\b/i.test(question);
+
+  if (!asksWeather) return null;
+
+  // 2. Obtener la fecha actual de Colombia
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Bogota",
     year: "numeric",
@@ -888,41 +895,41 @@ async function getWeatherAnswer(question) {
     day: "2-digit"
   }).formatToParts(new Date());
 
-  const getPart = (name) => parts.find(p => p.type === name).value;
+  const getPart = name =>
+    parts.find(p => p.type === name).value;
 
   const today =
     `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
 
+  const q = question.toLowerCase().trim();
   let targetDate = today;
-  const q = question.toLowerCase();
 
-  // Reconocer ciudad, municipio y departamento
-const cityMatch = q.match(
-  /\ben\s+(.+?)(?=\s+(?:hoy|mañana|pasado mañana|para hoy|para mañana|el día|este día)|[?.!,]|$)/i
-);
+  // 3. Identificar la ciudad o municipio
+  const cityMatch = q.match(
+    /\ben\s+(?:el municipio de |la ciudad de |el pueblo de |la población de )?(.+?)(?=\s+(?:para hoy|para mañana|hoy|mañana|pasado mañana|esta noche|esta tarde|dentro de|en \d+ días?)|[?.!,]|$)/i
+  );
 
-let city = cityMatch ? cityMatch[1].trim() : "Cali";
+  let city = cityMatch ? cityMatch[1].trim() : "Cali";
 
-// Limpiar palabras que no pertenecen al lugar
-city = city.replace(
-  /\s+(?:por favor|hoy|mañana|pasado mañana)$/i,
-  ""
-).trim();
+  city = city
+    .replace(/^(el municipio de |la ciudad de |el pueblo de |la población de )/i, "")
+    .replace(/\s+(por favor|porfa|gracias)$/i, "")
+    .trim();
 
-if (!city) city = "Cali";
+  if (!city) city = "Cali";
 
-  // Reconocer fechas relativas
+  // 4. Identificar fechas relativas
   if (/\bpasado mañana\b/.test(q)) {
     const d = new Date(today + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + 2);
     targetDate = d.toISOString().slice(0, 10);
+
   } else if (/\bmañana\b/.test(q)) {
     const d = new Date(today + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + 1);
     targetDate = d.toISOString().slice(0, 10);
   }
 
-  // Reconocer expresiones como "en 3 días"
   const relativeMatch = q.match(
     /\b(?:en|dentro de)\s+(\d{1,2})\s+días?\b/
   );
@@ -933,17 +940,17 @@ if (!city) city = "Cali";
     targetDate = d.toISOString().slice(0, 10);
   }
 
-  // Reconocer fechas como 15/11/2026 o 15-11-2026
-const numericDate = q.match(
-  /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
-);
+  // 5. Reconocer fechas numéricas: 15/11/2026 o 15-11-2026
+  const numericDate = q.match(
+    /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
+  );
 
   if (numericDate) {
     targetDate =
       `${numericDate[3]}-${numericDate[2].padStart(2, "0")}-${numericDate[1].padStart(2, "0")}`;
   }
 
-  // Reconocer fechas como "15 de noviembre"
+  // 6. Reconocer fechas como 15 de noviembre
   const months = {
     enero: "01",
     febrero: "02",
@@ -965,25 +972,26 @@ const numericDate = q.match(
   );
 
   if (namedDate) {
-    const year = namedDate[3] || today.slice(0, 4);
+    let year = Number(namedDate[3] || today.slice(0, 4));
 
     targetDate =
       `${year}-${months[namedDate[2]]}-${namedDate[1].padStart(2, "0")}`;
 
     if (!namedDate[3] && targetDate < today) {
+      year++;
       targetDate =
-        `${Number(year) + 1}-${months[namedDate[2]]}-${namedDate[1].padStart(2, "0")}`;
+        `${year}-${months[namedDate[2]]}-${namedDate[1].padStart(2, "0")}`;
     }
   }
 
-  // Comprobar que la fecha sea válida
+  // 7. Validar la fecha
   const selectedDate = new Date(targetDate + "T12:00:00Z");
 
   if (
     Number.isNaN(selectedDate.getTime()) ||
     selectedDate.toISOString().slice(0, 10) !== targetDate
   ) {
-    return "No pude interpretar esa fecha. Puedes preguntarme, por ejemplo: ¿Cómo estará el clima el 15 de noviembre?";
+    return "No pude interpretar esa fecha. Indícame una fecha válida.";
   }
 
   const daysAhead = Math.round(
@@ -996,45 +1004,70 @@ const numericDate = q.match(
   }
 
   if (daysAhead > 15) {
-    return "Puedo consultar el pronóstico hasta 16 días desde hoy. Indícame una fecha dentro de ese periodo.";
+    return "Puedo consultar el pronóstico hasta 16 días desde hoy.";
   }
 
-  // Buscar las coordenadas de la ciudad
-  const geoUrl = new URL(
-    "https://geocoding-api.open-meteo.com/v1/search"
+  // 8. Buscar primero el lugar en Colombia
+  async function searchPlace(countryCode) {
+    const geoUrl = new URL(
+      "https://geocoding-api.open-meteo.com/v1/search"
+    );
+
+    const params = {
+      name: city,
+      count: "10",
+      language: "es",
+      format: "json"
+    };
+
+    if (countryCode) {
+      params.countryCode = countryCode;
+    }
+
+    geoUrl.search = new URLSearchParams(params);
+
+    const response = await fetch(geoUrl);
+
+    if (!response.ok) {
+      throw new Error("No se pudo conectar con el buscador de ciudades.");
+    }
+
+    const data = await response.json();
+    return data.results || [];
+  }
+
+  let places = await searchPlace("CO");
+
+  // Si no aparece en Colombia, buscar en otros países
+  if (places.length === 0) {
+    places = await searchPlace(null);
+  }
+
+  if (places.length === 0) {
+    return `No encontré el lugar "${city}". Comprueba el nombre e intenta nuevamente.`;
+  }
+
+  // Priorizar coincidencia exacta con el nombre solicitado
+  const normalize = value =>
+    value.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const exactPlace = places.find(
+    item => normalize(item.name) === normalize(city)
   );
 
-  geoUrl.search = new URLSearchParams({
-    name: city,
-    count: "10",
-    language: "es",
-    format: "json"
-  });
-
-  const geoResponse = await fetch(geoUrl);
-
-  if (!geoResponse.ok) {
-    throw new Error("No se pudo localizar la ciudad.");
-  }
-
-  const geoData = await geoResponse.json();
-
-  if (!geoData.results || geoData.results.length === 0) {
-    return "No encontré la ciudad " + city +
-      ". Comprueba el nombre o pregunta por otra ciudad.";
-  }
-
-  // Priorizar ciudades de Colombia cuando existan coincidencias
-  const place =
-    geoData.results.find(item => item.country_code === "CO") ||
-    geoData.results[0];
+  const place = exactPlace || places[0];
 
   const cityLabel = place.name || city;
-  const locationLabel = place.admin1
-    ? cityLabel + ", " + place.admin1
-    : cityLabel;
+  const locationLabel = [
+    cityLabel,
+    place.admin1,
+    place.country
+  ].filter(Boolean).join(", ");
 
-  // Consultar el pronóstico meteorológico
+  // 9. Consultar el pronóstico meteorológico
   const url = new URL("https://api.open-meteo.com/v1/forecast");
 
   url.search = new URLSearchParams({
@@ -1054,7 +1087,7 @@ const numericDate = q.match(
 
   const data = await response.json();
 
-  if (!data.current || !data.daily || !data.daily.time) {
+  if (!data.daily || !data.daily.time) {
     throw new Error("El servicio meteorológico no entregó datos válidos.");
   }
 
@@ -1064,6 +1097,7 @@ const numericDate = q.match(
     return "No tengo un pronóstico disponible para esa fecha.";
   }
 
+  // 10. Traducir los códigos meteorológicos
   const descriptions = {
     0: "despejado",
     1: "mayormente despejado",
@@ -1108,26 +1142,22 @@ const numericDate = q.match(
     "condiciones variables";
 
   let answer =
-    "Pronóstico meteorológico para " + locationLabel +
-    ", " + dateLabel + ".\n\n" +
-    "Condiciones previstas: " + condition + ".\n" +
-    "Temperatura máxima: " +
-    data.daily.temperature_2m_max[index] + " °C.\n" +
-    "Temperatura mínima: " +
-    data.daily.temperature_2m_min[index] + " °C.\n" +
-    "Probabilidad máxima de lluvia: " +
-    data.daily.precipitation_probability_max[index] + "%.\n";
+    `Pronóstico meteorológico para ${locationLabel}, ${dateLabel}.\n\n` +
+    `Condiciones previstas: ${condition}.\n` +
+    `Temperatura máxima: ${data.daily.temperature_2m_max[index]} °C.\n` +
+    `Temperatura mínima: ${data.daily.temperature_2m_min[index]} °C.\n` +
+    `Probabilidad máxima de lluvia: ${data.daily.precipitation_probability_max[index]}%.\n`;
 
-  if (daysAhead === 0) {
+  if (daysAhead === 0 && data.current) {
     answer +=
       "\nCondiciones actuales:\n" +
-      "Temperatura: " + data.current.temperature_2m + " °C.\n" +
-      "Sensación térmica: " + data.current.apparent_temperature + " °C.\n" +
-      "Humedad: " + data.current.relative_humidity_2m + "%.\n" +
-      "Viento: " + data.current.wind_speed_10m + " km/h.\n";
+      `Temperatura: ${data.current.temperature_2m} °C.\n` +
+      `Sensación térmica: ${data.current.apparent_temperature} °C.\n` +
+      `Humedad: ${data.current.relative_humidity_2m}%.\n` +
+      `Viento: ${data.current.wind_speed_10m} km/h.\n`;
   }
 
-  answer += "\nDatos consultados en el servicio meteorológico para " +
+  answer += "\nInformación meteorológica consultada para " +
     locationLabel + ".";
 
   return answer;
