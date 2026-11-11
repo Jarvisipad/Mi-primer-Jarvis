@@ -922,7 +922,7 @@ async function getWeatherAnswer(question) {
   }
 
   // Reconocer fechas como 15/11/2026 o 15-11-2026
-  const numericDate = q.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/);
+ const numericDate = q.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/);
 
   if (numericDate) {
     targetDate =
