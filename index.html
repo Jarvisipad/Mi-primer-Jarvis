@@ -878,14 +878,7 @@ if (filteredFacts.length === 0) {
 }
 $("refreshFacts").addEventListener("click", loadFacts);
 $("factsCategory").addEventListener("change", loadFacts);
-/* CONSULTA DEL CLIMA EN CALI */
-async function getWeatherAnswer(question) {
-  const asksWeather =
-    /\b(clima|tiempo|temperatura|lluvia|pronóstico|pronostico)\b/i.test(question);
-
-  if (!asksWeather) return null;
-
-  // Obtener la fecha actual de Colombia
+ // Obtener la fecha actual de Colombia
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Bogota",
     year: "numeric",
@@ -901,6 +894,20 @@ async function getWeatherAnswer(question) {
   let targetDate = today;
   const q = question.toLowerCase();
 
+  // Reconocer la ciudad. Si no se indica, usar Cali.
+  const cityMatch = q.match(
+    /\ben\s+([a-záéíóúñü]+(?:\s+[a-záéíóúñü]+){0,3})/i
+  );
+
+  let city = cityMatch ? cityMatch[1].trim() : "Cali";
+
+  city = city.replace(
+    /\s+(?:pasado\s+mañana|mañana|hoy|para|el|este|esta|dentro de).*$/i,
+    ""
+  ).trim();
+
+  if (!city) city = "Cali";
+
   // Reconocer fechas relativas
   if (/\bpasado mañana\b/.test(q)) {
     const d = new Date(today + "T12:00:00Z");
@@ -912,8 +919,10 @@ async function getWeatherAnswer(question) {
     targetDate = d.toISOString().slice(0, 10);
   }
 
-  // Reconocer expresiones como "en 3 días" o "dentro de 5 días"
-  const relativeMatch = q.match(/\b(?:en|dentro de)\s+(\d{1,2})\s+días?\b/);
+  // Reconocer expresiones como "en 3 días"
+  const relativeMatch = q.match(
+    /\b(?:en|dentro de)\s+(\d{1,2})\s+días?\b/
+  );
 
   if (relativeMatch) {
     const d = new Date(today + "T12:00:00Z");
@@ -922,7 +931,9 @@ async function getWeatherAnswer(question) {
   }
 
   // Reconocer fechas como 15/11/2026 o 15-11-2026
- const numericDate = q.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/);
+  const numericDate = q.match(
+    /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
+  );
 
   if (numericDate) {
     targetDate =
@@ -952,6 +963,7 @@ async function getWeatherAnswer(question) {
 
   if (namedDate) {
     const year = namedDate[3] || today.slice(0, 4);
+
     targetDate =
       `${year}-${months[namedDate[2]]}-${namedDate[1].padStart(2, "0")}`;
 
@@ -972,8 +984,8 @@ async function getWeatherAnswer(question) {
   }
 
   const daysAhead = Math.round(
-    (selectedDate.getTime() - new Date(today + "T12:00:00Z").getTime()) /
-    86400000
+    (selectedDate.getTime() -
+      new Date(today + "T12:00:00Z").getTime()) / 86400000
   );
 
   if (daysAhead < 0) {
@@ -981,15 +993,50 @@ async function getWeatherAnswer(question) {
   }
 
   if (daysAhead > 15) {
-    return "Puedo consultar el pronóstico de Cali hasta 16 días desde hoy. Indícame una fecha dentro de ese periodo.";
+    return "Puedo consultar el pronóstico hasta 16 días desde hoy. Indícame una fecha dentro de ese periodo.";
   }
 
-  // Consultar el pronóstico de Cali
+  // Buscar las coordenadas de la ciudad
+  const geoUrl = new URL(
+    "https://geocoding-api.open-meteo.com/v1/search"
+  );
+
+  geoUrl.search = new URLSearchParams({
+    name: city,
+    count: "10",
+    language: "es",
+    format: "json"
+  });
+
+  const geoResponse = await fetch(geoUrl);
+
+  if (!geoResponse.ok) {
+    throw new Error("No se pudo localizar la ciudad.");
+  }
+
+  const geoData = await geoResponse.json();
+
+  if (!geoData.results || geoData.results.length === 0) {
+    return "No encontré la ciudad " + city +
+      ". Comprueba el nombre o pregunta por otra ciudad.";
+  }
+
+  // Priorizar ciudades de Colombia cuando existan coincidencias
+  const place =
+    geoData.results.find(item => item.country_code === "CO") ||
+    geoData.results[0];
+
+  const cityLabel = place.name || city;
+  const locationLabel = place.admin1
+    ? cityLabel + ", " + place.admin1
+    : cityLabel;
+
+  // Consultar el pronóstico meteorológico
   const url = new URL("https://api.open-meteo.com/v1/forecast");
 
   url.search = new URLSearchParams({
-    latitude: "3.4516",
-    longitude: "-76.5320",
+    latitude: String(place.latitude),
+    longitude: String(place.longitude),
     current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
     timezone: "America/Bogota",
@@ -1054,10 +1101,12 @@ async function getWeatherAnswer(question) {
   });
 
   const condition =
-    descriptions[data.daily.weather_code[index]] || "condiciones variables";
+    descriptions[data.daily.weather_code[index]] ||
+    "condiciones variables";
 
   let answer =
-    "Pronóstico meteorológico para Cali, " + dateLabel + ".\n\n" +
+    "Pronóstico meteorológico para " + locationLabel +
+    ", " + dateLabel + ".\n\n" +
     "Condiciones previstas: " + condition + ".\n" +
     "Temperatura máxima: " +
     data.daily.temperature_2m_max[index] + " °C.\n" +
@@ -1075,7 +1124,8 @@ async function getWeatherAnswer(question) {
       "Viento: " + data.current.wind_speed_10m + " km/h.\n";
   }
 
-  answer += "\nDatos consultados en el servicio meteorológico para Cali.";
+  answer += "\nDatos consultados en el servicio meteorológico para " +
+    locationLabel + ".";
 
   return answer;
 }
