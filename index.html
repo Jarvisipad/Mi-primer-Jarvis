@@ -878,6 +878,8 @@ if (filteredFacts.length === 0) {
 }
 $("refreshFacts").addEventListener("click", loadFacts);
 $("factsCategory").addEventListener("change", loadFacts);
+  /* CONSULTA DEL CLIMA EN CUALQUIER CIUDAD */
+async function getWeatherAnswer(question) {
  // Obtener la fecha actual de Colombia
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Bogota",
@@ -931,9 +933,9 @@ $("factsCategory").addEventListener("change", loadFacts);
   }
 
   // Reconocer fechas como 15/11/2026 o 15-11-2026
-  const numericDate = q.match(
-    /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
-  );
+const numericDate = q.match(
+  /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
+);
 
   if (numericDate) {
     targetDate =
