@@ -878,6 +878,79 @@ if (filteredFacts.length === 0) {
 }
 $("refreshFacts").addEventListener("click", loadFacts);
 $("factsCategory").addEventListener("change", loadFacts);
+/* CONSULTA DEL CLIMA EN CALI */
+async function getWeatherAnswer(question) {
+  const asksWeather =
+    /\b(clima|tiempo|temperatura|lluvia|pronóstico|pronostico)\b/i.test(question);
+
+  if (!asksWeather) return null;
+
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+
+  url.search = new URLSearchParams({
+    latitude: "3.4516",
+    longitude: "-76.5320",
+    current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+    daily: "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    timezone: "America/Bogota",
+    forecast_days: "1"
+  });
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error("No se pudo consultar el servicio meteorológico.");
+  }
+
+  const data = await response.json();
+
+  if (!data.current || !data.daily) {
+    throw new Error("El servicio meteorológico no entregó datos válidos.");
+  }
+
+  const descriptions = {
+    0: "despejado",
+    1: "mayormente despejado",
+    2: "parcialmente nublado",
+    3: "nublado",
+    45: "niebla",
+    48: "niebla con escarcha",
+    51: "llovizna ligera",
+    53: "llovizna moderada",
+    55: "llovizna intensa",
+    61: "lluvia ligera",
+    63: "lluvia moderada",
+    65: "lluvia intensa",
+    71: "nieve ligera",
+    73: "nieve moderada",
+    75: "nieve intensa",
+    80: "chubascos ligeros",
+    81: "chubascos moderados",
+    82: "chubascos fuertes",
+    95: "tormenta eléctrica"
+  };
+
+  const current = data.current;
+  const daily = data.daily;
+
+  const condition =
+    descriptions[current.weather_code] || "condiciones variables";
+
+  return (
+    "Consulta meteorológica para Cali.\n\n" +
+    "Ahora mismo tenemos " + condition + ".\n" +
+    "Temperatura actual: " + current.temperature_2m + " °C.\n" +
+    "Sensación térmica: " + current.apparent_temperature + " °C.\n" +
+    "Humedad: " + current.relative_humidity_2m + "%.\n" +
+    "Viento: " + current.wind_speed_10m + " km/h.\n\n" +
+    "Pronóstico de hoy:\n" +
+    "Temperatura máxima: " + daily.temperature_2m_max[0] + " °C.\n" +
+    "Temperatura mínima: " + daily.temperature_2m_min[0] + " °C.\n" +
+    "Probabilidad máxima de lluvia: " +
+    daily.precipitation_probability_max[0] + "%.\n\n" +
+    "Datos meteorológicos actualizados para Cali."
+  );
+}
 /* CHAT */
 async function sendMessage() {
   const text = $("command").value.trim();
