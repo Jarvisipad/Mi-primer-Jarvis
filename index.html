@@ -374,7 +374,24 @@ footer {
   <button class="secondary" id="refreshFacts">
     ACTUALIZAR RECUERDOS
   </button>
+  <div style="margin-top:15px">
+    <label for="factsCategory" style="color:#83b9d1;font-size:12px">
+      FILTRAR RECUERDOS POR CATEGORÍA
+    </label>
 
+    <select id="factsCategory"
+      style="width:100%;margin-top:8px;padding:12px;background:#020b17;color:#d9f7ff;border:1px solid #17628a;border-radius:9px">
+
+      <option value="all">TODAS LAS CATEGORÍAS</option>
+      <option value="proyecto">PROYECTO</option>
+      <option value="preferencia">PREFERENCIAS</option>
+      <option value="dispositivo">DISPOSITIVOS</option>
+      <option value="trabajo">TRABAJO</option>
+      <option value="identidad">IDENTIDAD</option>
+      <option value="otro">OTROS</option>
+
+    </select>
+  </div>
   <div id="factsStatus" style="margin-top:12px;color:#83b9d1">
     Esperando consulta de memoria...
   </div>
