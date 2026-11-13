@@ -965,7 +965,11 @@ async function getWeatherAnswer(question) {
     placeName = "Bogotá";
     departmentName = "Bogotá D.C.";
   }
-
+if (normalizedCity === "cali") {
+  coordinates = [3.4516, -76.5320];
+  placeName = "Cali";
+  departmentName = "Valle del Cauca";
+}
   if (normalizedCity === "betulia") {
     city = "San Juan de Betulia";
   }
