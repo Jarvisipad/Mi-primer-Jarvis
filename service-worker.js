@@ -1,4 +1,4 @@
-const CACHE = 'jarvis-ipad-v02';
+const CACHE = 'jarvis-ipad-v03';
 
 const FILES = [
   './',
