@@ -938,10 +938,11 @@ async function getWeatherAnswer(question) {
     return "Claro. ¿De qué ciudad, municipio, pueblo o departamento de Colombia quieres conocer el clima?";
   }
 
-  let placeText = placeMatch[1]
-    .replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
-    .replace(/\b(colombia)\b/gi, "")
-    .trim();
+ let placeText = placeMatch[1]
+  .replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
+  .replace(/^(?:en|para|de)\s+/i, "")
+  .replace(/\b(colombia)\b/gi, "")
+  .trim();
 
   const parts = placeText.split(",").map(p => p.trim()).filter(Boolean);
   let city = parts[0] || "";
