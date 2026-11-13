@@ -27,9 +27,31 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+
+  // Consultar siempre la versión más reciente de index.html
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.endsWith('/') || url.pathname.endsWith('/index.html'))
+  ) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache =>
+            cache.put(event.request, copy)
+          );
+        }
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Para los demás archivos, conservar el funcionamiento de la caché
   event.respondWith(
     caches.match(event.request).then(response =>
-      response || fetch(event.request).catch(() => caches.match('./index.html'))
+      response || fetch(event.request)
     )
   );
 });
