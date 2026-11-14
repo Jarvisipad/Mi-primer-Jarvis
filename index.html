@@ -940,12 +940,13 @@ const placeMatch = question.match(
     return "Claro. ¿De qué ciudad, municipio, pueblo o departamento de Colombia quieres conocer el clima?";
   }
 
- let placeText = placeMatch[1]
- .replace(/\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b.*$/i, "")
- .replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
- .replace(/^(?:en|para|de)\s+/i, "")
- .replace(/\b(colombia)\b/gi, "")
- .trim();
+let placeText = placeMatch[1]
+.replace(/\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b.*$/i, "")
+.replace(/\s+(?:(?:el\s+)?d[ií]a\s+)?\d{1,2}\s+de\s+[a-záéíóúñ]+\s+(?:de|del)\s+\d{4}\b.*$/i, "")
+.replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
+.replace(/^(?:en|para|de)\s+/i, "")
+.replace(/\b(colombia)\b/gi, "")
+.trim();
 
   const parts = placeText.split(",").map(p => p.trim()).filter(Boolean);
   let city = parts[0] || "";
@@ -1005,6 +1006,22 @@ if (normalizedCity === "cali") {
   }
 
 
+const monthNames = {
+  enero: 1,
+  febrero: 2,
+  marzo: 3,
+  abril: 4,
+  mayo: 5,
+  junio: 6,
+  julio: 7,
+  agosto: 8,
+  septiembre: 9,
+  setiembre: 9,
+  octubre: 10,
+  noviembre: 11,
+  diciembre: 12
+};
+
 const numericDate = question.match(
   /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
 );
@@ -1022,7 +1039,6 @@ if (numericDate) {
   const month = String(monthNames[normalize(writtenDate[2])]).padStart(2, "0");
   targetDate = `${writtenDate[3]}-${month}-${day}`;
 }
-
   // Si preguntan por un departamento, usar su referencia regional.
   const departmentKey = normalize(city).replace(/\s+/g, "_");
 
