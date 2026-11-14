@@ -930,9 +930,11 @@ async function getWeatherAnswer(question) {
   };
 
   // Identificar el lugar preguntado.
-  const placeMatch = question.match(
-    /\b(?:en|para|del municipio de|de)\s+(.+?)(?:[?.!,;]|$)/i
-  );
+ const placeMatch = question.match(
+  /\b(?:la ciudad de|ciudad de|el municipio de|municipio de|el pueblo de|pueblo de)\s+(.+?)(?=\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b|[?.!,;]|$)/i
+) || question.match(
+  /\b(?:en|para|del municipio de|de)\s+(.+?)(?=\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b|[?.!,;]|$)/i
+);
 
   if (!placeMatch) {
     return "Claro. ¿De qué ciudad, municipio, pueblo o departamento de Colombia quieres conocer el clima?";
