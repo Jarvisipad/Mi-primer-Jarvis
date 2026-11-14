@@ -1189,11 +1189,41 @@ Probabilidad máxima de lluvia: ${rain ?? "sin dato"}%.
 Estos datos corresponden al pronóstico meteorológico de la ubicación consultada.`;
 }
 /* CHAT */
+  function ejecutarAtajoJarvis(nombre) {
+  const atajos = {
+    safari: "JARVIS - Abrir Safari",
+    mapas: "JARVIS - Abrir Mapas",
+    whatsapp: "JARVIS - Abrir WhatsApp"
+  };
+
+  const atajo = atajos[nombre];
+  if (!atajo) return false;
+
+  const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(atajo);
+  window.location.href = url;
+  return true;
+}
 async function sendMessage() {
   const text = $("command").value.trim();
 
   if (!text || busy || initializing) return;
+if (comando.includes("abre safari")) {
+  ejecutarAtajoJarvis("safari");
+  addMessage("assistant", "Abriendo Safari.");
+  return;
+}
 
+if (comando.includes("abre mapas")) {
+  ejecutarAtajoJarvis("mapas");
+  addMessage("assistant", "Abriendo Mapas.");
+  return;
+}
+
+if (comando.includes("abre whatsapp")) {
+  ejecutarAtajoJarvis("whatsapp");
+  addMessage("assistant", "Abriendo WhatsApp.");
+  return;
+}
   busy = true;
   $("send").disabled = true;
   $("command").value = "";
