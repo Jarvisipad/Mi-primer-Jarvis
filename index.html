@@ -1208,6 +1208,7 @@ async function sendMessage() {
 
   if (!text || busy || initializing) return;
   const comando = text.toLowerCase();
+  $("command").value = "";
 if (comando.includes("abre safari")) {
   ejecutarAtajoJarvis("safari");
   addMessage("assistant", "Abriendo Safari.");
