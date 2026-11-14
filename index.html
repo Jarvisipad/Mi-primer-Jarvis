@@ -941,10 +941,11 @@ async function getWeatherAnswer(question) {
   }
 
  let placeText = placeMatch[1]
-  .replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
-  .replace(/^(?:en|para|de)\s+/i, "")
-  .replace(/\b(colombia)\b/gi, "")
-  .trim();
+ .replace(/\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b.*$/i, "")
+ .replace(/\b(hoy|mañana|pasado mañana|actualmente|ahora|esta tarde|esta noche|por favor)\b/gi, "")
+ .replace(/^(?:en|para|de)\s+/i, "")
+ .replace(/\b(colombia)\b/gi, "")
+ .trim();
 
   const parts = placeText.split(",").map(p => p.trim()).filter(Boolean);
   let city = parts[0] || "";
@@ -1003,9 +1004,9 @@ if (normalizedCity === "cali") {
     targetDate = d.toISOString().slice(0, 10);
   }
 
-  const numericDate = question.match(
+ const numericDate = question.match(
   /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
-  );
+);
 
   if (numericDate) {
     const day = numericDate[1].padStart(2, "0");
