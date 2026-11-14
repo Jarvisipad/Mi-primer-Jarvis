@@ -930,10 +930,10 @@ async function getWeatherAnswer(question) {
   };
 
   // Identificar el lugar preguntado.
- const placeMatch = question.match(
-  /\b(?:la ciudad de|ciudad de|el municipio de|municipio de|el pueblo de|pueblo de)\s+(.+?)(?=\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b|[?.!,;]|$)/i
+const placeMatch = question.match(
+  /\b(?:la ciudad de|ciudad de|el municipio de|municipio de|el pueblo de|pueblo de)\s+(.+?)(?=\s+(?:(?:para|el día|el dia|día|dia)\s+)?(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}\s+de\s+[a-záéíóúñ]+\s+(?:de|del)\s+\d{4})\b|[?.!,;]|$)/i
 ) || question.match(
-  /\b(?:en|para|del municipio de|de)\s+(.+?)(?=\s+\bpara\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}\b|[?.!,;]|$)/i
+  /\b(?:en|para|del municipio de|de)\s+(.+?)(?=\s+(?:(?:para|el día|el dia|día|dia)\s+)?(?:\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{1,2}\s+de\s+[a-záéíóúñ]+\s+(?:de|del)\s+\d{4})\b|[?.!,;]|$)/i
 );
 
   if (!placeMatch) {
@@ -1004,15 +1004,24 @@ if (normalizedCity === "cali") {
     targetDate = d.toISOString().slice(0, 10);
   }
 
- const numericDate = question.match(
+
+const numericDate = question.match(
   /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
 );
 
-  if (numericDate) {
-    const day = numericDate[1].padStart(2, "0");
-    const month = numericDate[2].padStart(2, "0");
-    targetDate = `${numericDate[3]}-${month}-${day}`;
-  }
+const writtenDate = question.match(
+  /\b(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+(?:de|del)\s+(\d{4})\b/i
+);
+
+if (numericDate) {
+  const day = numericDate[1].padStart(2, "0");
+  const month = numericDate[2].padStart(2, "0");
+  targetDate = `${numericDate[3]}-${month}-${day}`;
+} else if (writtenDate) {
+  const day = writtenDate[1].padStart(2, "0");
+  const month = String(monthNames[normalize(writtenDate[2])]).padStart(2, "0");
+  targetDate = `${writtenDate[3]}-${month}-${day}`;
+}
 
   // Si preguntan por un departamento, usar su referencia regional.
   const departmentKey = normalize(city).replace(/\s+/g, "_");
