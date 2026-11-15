@@ -1190,11 +1190,12 @@ Estos datos corresponden al pronóstico meteorológico de la ubicación consulta
 }
 /* CHAT */
   function ejecutarAtajoJarvis(nombre, entrada = "") {
-  const atajos = {
-    safari: "JARVIS - Abrir Safari",
-    mapas: "JARVIS - Abrir Mapas",
-    whatsapp: "JARVIS - Enviar WhatsApp"
-  };
+const atajos = {
+  safari: "JARVIS - Abrir Safari",
+  mapas: "JARVIS - Abrir Mapas",
+  whatsapp: "JARVIS - Abrir WhatsApp",
+  enviarWhatsApp: "JARVIS - Enviar WhatsApp"
+};
 
   const atajo = atajos[nombre];
   if (!atajo) return false;
