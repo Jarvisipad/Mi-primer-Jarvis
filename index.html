@@ -1293,16 +1293,21 @@ async function calculateTrafficRoute(destinationText) {
     alternatives: "true",
     overview: "full",
     annotations: "congestion,distance,duration",
-    depart_at: new Date().toISOString()
+   depart_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
   }).toString();
 
-  const routeResponse = await fetch(directionsUrl);
+const routeResponse = await fetch(directionsUrl);
+const routeData = await routeResponse.json().catch(() => ({}));
 
-  if (!routeResponse.ok) {
-    throw new Error("No pude calcular las rutas con el tráfico actual.");
-  }
+if (!routeResponse.ok) {
+  const detail =
+    routeData.message ||
+    routeData.error ||
+    routeData.code ||
+    "HTTP " + routeResponse.status;
 
-  const routeData = await routeResponse.json();
+  throw new Error("Mapbox Directions: " + detail);
+}
 
   if (routeData.code !== "Ok" ||
       !Array.isArray(routeData.routes) ||
