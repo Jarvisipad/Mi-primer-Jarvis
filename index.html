@@ -1234,24 +1234,38 @@ async function startTrafficCheck() {
     "Consultaré el tráfico de ese recorrido y compararé las rutas alternativas.";
 }
 
-async function calculateTrafficRoute(destinationText) {
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 
+async function calculateTrafficRoute(destinationText) {
   if (!pendingTrafficOrigin) {
     throw new Error("Primero necesito obtener tu ubicación.");
   }
 
   const origin = pendingTrafficOrigin;
 
-  // Buscar el destino en Colombia.
-  const geoUrl = new URL(
-    "https://api.mapbox.com/search/geocode/v6/forward"
-  );
+  // Limpiar conectores comunes al inicio del destino
+  const cleanDestination = destinationText
+    .replace(/^(?:para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|hacia\s+(?:el|la)?|hasta\s+(?:el|la)?|a(?:l)?)\s+/i, "")
+    .replace(/[.!?]+$/, "")
+    .trim();
 
+  // Usar Search Box API (soporta centros comerciales y puntos de interés)
+  const geoUrl = new URL("https://api.mapbox.com/search/searchbox/v1/forward");
   geoUrl.search = new URLSearchParams({
-    q: destinationText,
+    q: cleanDestination,
     country: "CO",
     language: "es",
-    limit: "1",
+    limit: "10",
+    types: "poi,address,place,locality",
     proximity: `${origin.lon},${origin.lat}`,
     access_token: MAPBOX_TOKEN
   }).toString();
@@ -1259,90 +1273,90 @@ async function calculateTrafficRoute(destinationText) {
   const geoResponse = await fetch(geoUrl);
 
   if (!geoResponse.ok) {
-    throw new Error("No pude localizar el destino.");
+    throw new Error("No pude conectar con el buscador de destinos de Mapbox.");
   }
 
   const geoData = await geoResponse.json();
+  const features = geoData.features || [];
 
-  if (!geoData.features || !geoData.features.length) {
+  if (!features.length) {
     throw new Error(
-      "No encontré ese destino. Indícame una dirección o lugar más preciso."
+      `No encontré "${cleanDestination}". Indícame una dirección o lugar más específico.`
     );
   }
 
-  const destination = geoData.features[0];
-  const destinationCoords = destination.geometry.coordinates;
+  // Filtrar resultados que estén a menos de 60 km de tu ubicación actual
+  const nearbyResults = features
+    .map(f => {
+      const [lon, lat] = f.geometry.coordinates;
+      return {
+        feature: f,
+        distanceKm: getDistanceKm(origin.lat, origin.lon, lat, lon)
+      };
+    })
+    .filter(item => item.distanceKm <= 60)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  const selected = (nearbyResults[0] || { feature: features[0] }).feature;
+  const destinationCoords = selected.geometry.coordinates;
 
   const destinationName =
-    destination.properties?.full_address ||
-    destination.properties?.name ||
-    destinationText;
+    selected.properties?.full_address ||
+    selected.properties?.name ||
+    cleanDestination;
 
-  // Consultar rutas teniendo en cuenta el tráfico.
+  // Consultar rutas con tráfico en tiempo real
   const coordinates =
     `${origin.lon},${origin.lat};` +
     `${destinationCoords[0]},${destinationCoords[1]}`;
 
   const directionsUrl = new URL(
-    "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" +
-    coordinates
+    "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" + coordinates
   );
 
   directionsUrl.search = new URLSearchParams({
     access_token: MAPBOX_TOKEN,
     alternatives: "true",
     overview: "full",
-    annotations: "congestion,distance,duration",
-   depart_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
+    annotations: "congestion,distance,duration"
   }).toString();
 
-const routeResponse = await fetch(directionsUrl);
-const routeData = await routeResponse.json().catch(() => ({}));
+  const routeResponse = await fetch(directionsUrl);
+  const routeData = await routeResponse.json().catch(() => ({}));
 
-if (!routeResponse.ok) {
-  const detail =
-    routeData.message ||
-    routeData.error ||
-    routeData.code ||
-    "HTTP " + routeResponse.status;
+  if (!routeResponse.ok) {
+    const detail =
+      routeData.message ||
+      routeData.error ||
+      routeData.code ||
+      "HTTP " + routeResponse.status;
+    throw new Error("Mapbox Directions: " + detail);
+  }
 
-  throw new Error("Mapbox Directions: " + detail);
-}
-
-  if (routeData.code !== "Ok" ||
-      !Array.isArray(routeData.routes) ||
-      routeData.routes.length === 0) {
+  if (
+    routeData.code !== "Ok" ||
+    !Array.isArray(routeData.routes) ||
+    routeData.routes.length === 0
+  ) {
     throw new Error("No encontré una ruta válida hasta ese destino.");
   }
 
-  // Escoger el recorrido con menor tiempo estimado.
   const bestRoute = routeData.routes.reduce(
-    (best, route) =>
-      route.duration < best.duration ? route : best,
+    (best, route) => (route.duration < best.duration ? route : best),
     routeData.routes[0]
   );
 
   const leg = bestRoute.legs?.[0];
   const annotation = leg?.annotation;
-
   const congestion = annotation?.congestion || [];
   const distances = annotation?.distance || [];
 
-  const levels = {
-    low: 0,
-    moderate: 0,
-    heavy: 0,
-    severe: 0
-  };
-
+  const levels = { low: 0, moderate: 0, heavy: 0, severe: 0 };
   let knownDistance = 0;
 
   congestion.forEach((level, index) => {
-
     const distance = Number(distances[index]);
-    const weight =
-      Number.isFinite(distance) && distance > 0 ? distance : 1;
-
+    const weight = Number.isFinite(distance) && distance > 0 ? distance : 1;
     if (Object.prototype.hasOwnProperty.call(levels, level)) {
       levels[level] += weight;
       knownDistance += weight;
@@ -1352,17 +1366,13 @@ if (!routeResponse.ok) {
   let trafficStatus = "sin datos suficientes";
 
   if (knownDistance > 0) {
-
-    const dominantLevel = Object.entries(levels)
-      .sort((a, b) => b[1] - a[1])[0][0];
-
+    const dominantLevel = Object.entries(levels).sort((a, b) => b[1] - a[1])[0][0];
     const labels = {
       low: "fluido",
       moderate: "moderado",
       heavy: "congestionado",
       severe: "muy congestionado"
     };
-
     trafficStatus = labels[dominantLevel];
   }
 
@@ -1374,23 +1384,19 @@ if (!routeResponse.ok) {
     `Estado del tráfico: ${trafficStatus}.\n` +
     `Tiempo estimado: ${minutes} minutos.\n` +
     `Distancia: ${kilometers} kilómetros.\n\n` +
-    `He seleccionado la ruta con menor tiempo estimado ` +
-    `entre las alternativas disponibles, teniendo en cuenta ` +
-    `la información de tráfico de Mapbox.`;
+    `He seleccionado la ruta más rápida disponible según el tráfico actual.`;
 
   if (trafficStatus === "sin datos suficientes") {
-    answer +=
-      "\nNo recibí información suficiente para clasificar " +
-      "la congestión por tramos.";
+    answer += "\nNo recibí información suficiente para clasificar la congestión por tramos.";
   }
 
-return {
-  answer,
-  trafficStatus,
-  origin,
-  destinationCoords,
-  destinationName
-};
+  return {
+    answer,
+    trafficStatus,
+    origin,
+    destinationCoords,
+    destinationName
+  };
 }
 
 function showTrafficNavigationOptions(result) {
@@ -1549,13 +1555,39 @@ const asksTraffic =
 
 if (asksTraffic) {
   try {
+    // Detectar si el usuario ya incluyó el destino en la misma frase
+    const inlineDestMatch = text.match(
+      /\b(?:hacia|hasta|para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|a(?:l)?)\s+(.+)/i
+    );
+
+    if (inlineDestMatch && inlineDestMatch[1].trim().length > 2) {
+      setState("OBTENIENDO UBICACIÓN Y RUTA...");
+      pendingTrafficOrigin = await getTrafficLocation();
+      const routeResult = await calculateTrafficRoute(inlineDestMatch[1].trim());
+
+      addMessage("assistant", routeResult.answer);
+      setState("JARVIS LISTO");
+      speak(routeResult.answer);
+
+      if (
+        routeResult.trafficStatus === "congestionado" ||
+        routeResult.trafficStatus === "muy congestionado"
+      ) {
+        showTrafficNavigationOptions(routeResult);
+      }
+      pendingTrafficOrigin = null;
+      return;
+    }
+
     const answer = await startTrafficCheck();
     addMessage("assistant", answer);
     setState("JARVIS LISTO");
     speak(answer);
   } catch (error) {
+    pendingTrafficOrigin = null;
     const answer = error.message;
     addMessage("assistant", answer);
+    setState("JARVIS LISTO");
     speak(answer);
   }
   return;
