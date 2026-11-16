@@ -1252,20 +1252,19 @@ async function calculateTrafficRoute(destinationText) {
 
   const origin = pendingTrafficOrigin;
 
-  // Limpiar conectores comunes al inicio del destino
+  // Limpiar conectores y frases comunes antes del destino
   const cleanDestination = destinationText
-    .replace(/^(?:para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|hacia\s+(?:el|la)?|hasta\s+(?:el|la)?|a(?:l)?)\s+/i, "")
+    .replace(/^.*?\b(?:para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|hacia\s+(?:el|la)?|hasta\s+(?:el|la)?|a(?:l)?)\s+/i, "")
     .replace(/[.!?]+$/, "")
     .trim();
 
-  // Usar Search Box API (soporta centros comerciales y puntos de interés)
+  // Usar Search Box API con país en minúsculas ("co")
   const geoUrl = new URL("https://api.mapbox.com/search/searchbox/v1/forward");
   geoUrl.search = new URLSearchParams({
     q: cleanDestination,
-    country: "CO",
+    country: "co",
     language: "es",
     limit: "10",
-    types: "poi,address,place,locality",
     proximity: `${origin.lon},${origin.lat}`,
     access_token: MAPBOX_TOKEN
   }).toString();
@@ -1279,14 +1278,12 @@ async function calculateTrafficRoute(destinationText) {
   const geoData = await geoResponse.json();
   const features = geoData.features || [];
 
-  if (!features.length) {
-    throw new Error(
-      `No encontré "${cleanDestination}". Indícame una dirección o lugar más específico.`
-    );
-  }
-
-  // Filtrar resultados que estén a menos de 60 km de tu ubicación actual
+  // Filtrar estrictamente resultados dentro de Colombia y a menos de 60 km
   const nearbyResults = features
+    .filter(f => {
+      const countryCode = f.properties?.context?.country?.country_code || "";
+      return !countryCode || countryCode.toUpperCase() === "CO";
+    })
     .map(f => {
       const [lon, lat] = f.geometry.coordinates;
       return {
@@ -1297,7 +1294,13 @@ async function calculateTrafficRoute(destinationText) {
     .filter(item => item.distanceKm <= 60)
     .sort((a, b) => a.distanceKm - b.distanceKm);
 
-  const selected = (nearbyResults[0] || { feature: features[0] }).feature;
+  if (!nearbyResults.length) {
+    throw new Error(
+      `No encontré "${cleanDestination}" cerca de tu ubicación actual. Intenta escribir el nombre más completo (por ejemplo: "Centro Comercial Chipichape Cali").`
+    );
+  }
+
+  const selected = nearbyResults[0].feature;
   const destinationCoords = selected.geometry.coordinates;
 
   const destinationName =
