@@ -1225,8 +1225,11 @@ if (solicitudWhatsApp) {
     return;
   }
 
-  ejecutarAtajoJarvis("whatsapp", contacto);
+  $("command").value = "";
+  addMessage("user", text);
   addMessage("assistant", "Preparando un mensaje de WhatsApp para " + contacto + ".");
+
+  ejecutarAtajoJarvis("enviarWhatsApp", contacto);
   return;
 }
   $("command").value = "";
