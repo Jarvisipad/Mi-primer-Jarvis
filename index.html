@@ -445,6 +445,7 @@ footer {
 /* CONFIGURACIÓN */
 const WORKER_URL = "https://jarvis-brain.emiroh29.workers.dev/";
 const USER_ID = "jarvis-primary-user";
+const MAPBOX_TOKEN = "pk.eyJ1IjoiZW1pcm9oMjkiLCJhIjoiY213aXQ0MWUyMTF2NDJ6cHBjd3dncjU5aCJ9.lu1yMbDx2GyHYZPYfs21Vg";  
 const VAPID_PUBLIC_KEY = "BPboxdh3jYEC8A-IvqcbaYjFnkl81oN1IDyyD4LWAUIFxtNrNzWRQGq5BdyN1dDqHot5rYrD6ZntFVg9dlL4At8";
 const PASSWORD_KEY = "jarvisSessionPassword";
 const HISTORY_KEY = "jarvisConversationV2";
@@ -1188,6 +1189,249 @@ Probabilidad máxima de lluvia: ${rain ?? "sin dato"}%.
 
 Estos datos corresponden al pronóstico meteorológico de la ubicación consultada.`;
 }
+/* =====================================
+   TRÁFICO EN TIEMPO REAL DE JARVIS
+===================================== */
+
+let pendingTrafficOrigin = null;
+
+function getTrafficLocation() {
+  return new Promise((resolve, reject) => {
+
+    if (!navigator.geolocation) {
+      reject(new Error("Este navegador no permite obtener la ubicación."));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        resolve({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        });
+      },
+      error => {
+        reject(new Error(
+          error.code === 1
+            ? "Debes permitir el acceso a la ubicación del iPad."
+            : "No pude obtener tu ubicación. Inténtalo nuevamente."
+        ));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 60000
+      }
+    );
+  });
+}
+
+async function startTrafficCheck() {
+
+  pendingTrafficOrigin = await getTrafficLocation();
+
+  return "Ya tengo tu ubicación actual. ¿A dónde te diriges? " +
+    "Consultaré el tráfico de ese recorrido y compararé las rutas alternativas.";
+}
+
+async function calculateTrafficRoute(destinationText) {
+
+  if (!pendingTrafficOrigin) {
+    throw new Error("Primero necesito obtener tu ubicación.");
+  }
+
+  const origin = pendingTrafficOrigin;
+
+  // Buscar el destino en Colombia.
+  const geoUrl = new URL(
+    "https://api.mapbox.com/search/geocode/v6/forward"
+  );
+
+  geoUrl.search = new URLSearchParams({
+    q: destinationText,
+    country: "CO",
+    language: "es",
+    limit: "1",
+    proximity: `${origin.lon},${origin.lat}`,
+    access_token: MAPBOX_TOKEN
+  }).toString();
+
+  const geoResponse = await fetch(geoUrl);
+
+  if (!geoResponse.ok) {
+    throw new Error("No pude localizar el destino.");
+  }
+
+  const geoData = await geoResponse.json();
+
+  if (!geoData.features || !geoData.features.length) {
+    throw new Error(
+      "No encontré ese destino. Indícame una dirección o lugar más preciso."
+    );
+  }
+
+  const destination = geoData.features[0];
+  const destinationCoords = destination.geometry.coordinates;
+
+  const destinationName =
+    destination.properties?.full_address ||
+    destination.properties?.name ||
+    destinationText;
+
+  // Consultar rutas teniendo en cuenta el tráfico.
+  const coordinates =
+    `${origin.lon},${origin.lat};` +
+    `${destinationCoords[0]},${destinationCoords[1]}`;
+
+  const directionsUrl = new URL(
+    "https://api.mapbox.com/directions/v5/mapbox/driving-traffic/" +
+    coordinates
+  );
+
+  directionsUrl.search = new URLSearchParams({
+    access_token: MAPBOX_TOKEN,
+    alternatives: "true",
+    overview: "full",
+    annotations: "congestion,distance,duration",
+    depart_at: new Date().toISOString()
+  }).toString();
+
+  const routeResponse = await fetch(directionsUrl);
+
+  if (!routeResponse.ok) {
+    throw new Error("No pude calcular las rutas con el tráfico actual.");
+  }
+
+  const routeData = await routeResponse.json();
+
+  if (routeData.code !== "Ok" ||
+      !Array.isArray(routeData.routes) ||
+      routeData.routes.length === 0) {
+    throw new Error("No encontré una ruta válida hasta ese destino.");
+  }
+
+  // Escoger el recorrido con menor tiempo estimado.
+  const bestRoute = routeData.routes.reduce(
+    (best, route) =>
+      route.duration < best.duration ? route : best,
+    routeData.routes[0]
+  );
+
+  const leg = bestRoute.legs?.[0];
+  const annotation = leg?.annotation;
+
+  const congestion = annotation?.congestion || [];
+  const distances = annotation?.distance || [];
+
+  const levels = {
+    low: 0,
+    moderate: 0,
+    heavy: 0,
+    severe: 0
+  };
+
+  let knownDistance = 0;
+
+  congestion.forEach((level, index) => {
+
+    const distance = Number(distances[index]);
+    const weight =
+      Number.isFinite(distance) && distance > 0 ? distance : 1;
+
+    if (Object.prototype.hasOwnProperty.call(levels, level)) {
+      levels[level] += weight;
+      knownDistance += weight;
+    }
+  });
+
+  let trafficStatus = "sin datos suficientes";
+
+  if (knownDistance > 0) {
+
+    const dominantLevel = Object.entries(levels)
+      .sort((a, b) => b[1] - a[1])[0][0];
+
+    const labels = {
+      low: "fluido",
+      moderate: "moderado",
+      heavy: "congestionado",
+      severe: "muy congestionado"
+    };
+
+    trafficStatus = labels[dominantLevel];
+  }
+
+  const minutes = Math.round(bestRoute.duration / 60);
+  const kilometers = (bestRoute.distance / 1000).toFixed(1);
+
+  let answer =
+    `Destino: ${destinationName}.\n\n` +
+    `Estado del tráfico: ${trafficStatus}.\n` +
+    `Tiempo estimado: ${minutes} minutos.\n` +
+    `Distancia: ${kilometers} kilómetros.\n\n` +
+    `He seleccionado la ruta con menor tiempo estimado ` +
+    `entre las alternativas disponibles, teniendo en cuenta ` +
+    `la información de tráfico de Mapbox.`;
+
+  if (trafficStatus === "sin datos suficientes") {
+    answer +=
+      "\nNo recibí información suficiente para clasificar " +
+      "la congestión por tramos.";
+  }
+
+return {
+  answer,
+  trafficStatus,
+  origin,
+  destinationCoords,
+  destinationName
+};
+}
+
+function showTrafficNavigationOptions(result) {
+
+  const container = document.createElement("div");
+
+  container.style.cssText =
+    "display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;";
+
+  const destination =
+    `${result.destinationCoords[1]},${result.destinationCoords[0]}`;
+
+  const origin =
+    `${result.origin.lat},${result.origin.lon}`;
+
+  const googleUrl =
+    "https://www.google.com/maps/dir/?api=1" +
+    "&origin=" + encodeURIComponent(origin) +
+    "&destination=" + encodeURIComponent(destination) +
+    "&travelmode=driving&dir_action=navigate";
+
+  const wazeUrl =
+    "https://waze.com/ul?ll=" +
+    encodeURIComponent(destination) +
+    "&navigate=yes";
+
+  const googleButton = document.createElement("button");
+  googleButton.type = "button";
+  googleButton.textContent = "ABRIR GOOGLE MAPS";
+  googleButton.addEventListener("click", () => {
+    window.location.href = googleUrl;
+  });
+
+  const wazeButton = document.createElement("button");
+  wazeButton.type = "button";
+  wazeButton.textContent = "ABRIR WAZE";
+  wazeButton.addEventListener("click", () => {
+    window.location.href = wazeUrl;
+  });
+
+  container.appendChild(googleButton);
+  container.appendChild(wazeButton);
+
+  $("chat").appendChild(container);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}  
 /* CHAT */
   function ejecutarAtajoJarvis(nombre, entrada = "") {
 const atajos = {
@@ -1258,7 +1502,59 @@ if (comando.includes("abre whatsapp")) {
   setState("JARVIS ESTÁ PROCESANDO...");
 
   try {
+/* CONSULTA DE TRÁFICO */
+if (pendingTrafficOrigin) {
 
+  if (/^(cancelar|cancel|no|olvídalo|olvidalo)$/i.test(text.trim())) {
+    pendingTrafficOrigin = null;
+    const answer = "He cancelado la consulta de tráfico.";
+    addMessage("assistant", answer);
+    setState("JARVIS LISTO");
+    speak(answer);
+    return;
+  }
+
+  try {
+    const routeResult = await calculateTrafficRoute(text);
+
+    addMessage("assistant", routeResult.answer);
+    setState("JARVIS LISTO");
+    speak(routeResult.answer);
+
+    if (
+  routeResult.trafficStatus === "congestionado" ||
+  routeResult.trafficStatus === "muy congestionado"
+) {
+  showTrafficNavigationOptions(routeResult);
+}
+    pendingTrafficOrigin = null;
+    return;
+
+  } catch (error) {
+    const answer = "No pude calcular la ruta. " + error.message +
+      " Puedes indicarme otro destino.";
+    addMessage("assistant", answer);
+    speak(answer);
+    return;
+  }
+}
+
+const asksTraffic =
+  /\b(tráfico|trafico|tránsito|transito|congestión|congestion|congestionado|congestionada)\b/i.test(text);
+
+if (asksTraffic) {
+  try {
+    const answer = await startTrafficCheck();
+    addMessage("assistant", answer);
+    setState("JARVIS LISTO");
+    speak(answer);
+  } catch (error) {
+    const answer = error.message;
+    addMessage("assistant", answer);
+    speak(answer);
+  }
+  return;
+}
     /* CONSULTAR CLIMA ANTES DE ENVIAR A GROQ */
     const weatherAnswer = await getWeatherAnswer(text);
 
