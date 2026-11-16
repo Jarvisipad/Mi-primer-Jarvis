@@ -1252,63 +1252,63 @@ async function calculateTrafficRoute(destinationText) {
 
   const origin = pendingTrafficOrigin;
 
-  // Limpiar conectores y frases comunes antes del destino
+  // Limpiar conectores antes del destino
   const cleanDestination = destinationText
     .replace(/^.*?\b(?:para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|hacia\s+(?:el|la)?|hasta\s+(?:el|la)?|a(?:l)?)\s+/i, "")
     .replace(/[.!?]+$/, "")
     .trim();
 
-  // Usar Search Box API con país en minúsculas ("co")
-  const geoUrl = new URL("https://api.mapbox.com/search/searchbox/v1/forward");
+  // Crear un cuadro de búsqueda (~45 km alrededor de tu ubicación actual)
+  const delta = 0.4;
+  const viewbox = `${origin.lon - delta},${origin.lat + delta},${origin.lon + delta},${origin.lat - delta}`;
+
+  // Buscar coordenadas exactas del lugar con OpenStreetMap (Nominatim)
+  const geoUrl = new URL("https://nominatim.openstreetmap.org/search");
   geoUrl.search = new URLSearchParams({
     q: cleanDestination,
-    country: "co",
-    language: "es",
-    limit: "10",
-    proximity: `${origin.lon},${origin.lat}`,
-    access_token: MAPBOX_TOKEN
+    format: "jsonv2",
+    countrycodes: "co",
+    viewbox: viewbox,
+    bounded: "1",
+    limit: "5",
+    "accept-language": "es"
   }).toString();
 
-  const geoResponse = await fetch(geoUrl);
+  const geoResponse = await fetch(geoUrl, {
+    headers: { "Accept": "application/json" }
+  });
 
   if (!geoResponse.ok) {
-    throw new Error("No pude conectar con el buscador de destinos de Mapbox.");
+    throw new Error("No pude conectar con el buscador de ubicaciones.");
   }
 
-  const geoData = await geoResponse.json();
-  const features = geoData.features || [];
+  const places = await geoResponse.json();
 
-  // Filtrar estrictamente resultados dentro de Colombia y a menos de 60 km
-  const nearbyResults = features
-    .filter(f => {
-      const countryCode = f.properties?.context?.country?.country_code || "";
-      return !countryCode || countryCode.toUpperCase() === "CO";
-    })
-    .map(f => {
-      const [lon, lat] = f.geometry.coordinates;
-      return {
-        feature: f,
-        distanceKm: getDistanceKm(origin.lat, origin.lon, lat, lon)
-      };
-    })
-    .filter(item => item.distanceKm <= 60)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
-
-  if (!nearbyResults.length) {
+  if (!Array.isArray(places) || places.length === 0) {
     throw new Error(
-      `No encontré "${cleanDestination}" cerca de tu ubicación actual. Intenta escribir el nombre más completo (por ejemplo: "Centro Comercial Chipichape Cali").`
+      `No encontré "${cleanDestination}" cerca de tu ubicación. Intenta con el nombre completo del lugar o dirección.`
     );
   }
 
-  const selected = nearbyResults[0].feature;
-  const destinationCoords = selected.geometry.coordinates;
+  // Elegir la coincidencia más cercana
+  const bestPlace = places
+    .map(p => {
+      const lat = parseFloat(p.lat);
+      const lon = parseFloat(p.lon);
+      return {
+        place: p,
+        lat,
+        lon,
+        distanceKm: getDistanceKm(origin.lat, origin.lon, lat, lon)
+      };
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm)[0];
 
-  const destinationName =
-    selected.properties?.full_address ||
-    selected.properties?.name ||
-    cleanDestination;
+  const destinationCoords = [bestPlace.lon, bestPlace.lat];
+  // Tomar solo el nombre corto del lugar (sin toda la cadena postal)
+  const destinationName = bestPlace.place.name || cleanDestination;
 
-  // Consultar rutas con tráfico en tiempo real
+  // Consultar tráfico real en Mapbox Directions
   const coordinates =
     `${origin.lon},${origin.lat};` +
     `${destinationCoords[0]},${destinationCoords[1]}`;
@@ -1321,27 +1321,14 @@ async function calculateTrafficRoute(destinationText) {
     access_token: MAPBOX_TOKEN,
     alternatives: "true",
     overview: "full",
-    annotations: "congestion,distance,duration"
+    annotations: "congestion,distance"
   }).toString();
 
   const routeResponse = await fetch(directionsUrl);
   const routeData = await routeResponse.json().catch(() => ({}));
 
-  if (!routeResponse.ok) {
-    const detail =
-      routeData.message ||
-      routeData.error ||
-      routeData.code ||
-      "HTTP " + routeResponse.status;
-    throw new Error("Mapbox Directions: " + detail);
-  }
-
-  if (
-    routeData.code !== "Ok" ||
-    !Array.isArray(routeData.routes) ||
-    routeData.routes.length === 0
-  ) {
-    throw new Error("No encontré una ruta válida hasta ese destino.");
+  if (!routeResponse.ok || routeData.code !== "Ok" || !routeData.routes?.length) {
+    throw new Error("No pude calcular una ruta válida hacia ese destino.");
   }
 
   const bestRoute = routeData.routes.reduce(
@@ -1349,8 +1336,7 @@ async function calculateTrafficRoute(destinationText) {
     routeData.routes[0]
   );
 
-  const leg = bestRoute.legs?.[0];
-  const annotation = leg?.annotation;
+  const annotation = bestRoute.legs?.[0]?.annotation;
   const congestion = annotation?.congestion || [];
   const distances = annotation?.distance || [];
 
@@ -1366,8 +1352,7 @@ async function calculateTrafficRoute(destinationText) {
     }
   });
 
-  let trafficStatus = "sin datos suficientes";
-
+  let trafficStatus = "normal";
   if (knownDistance > 0) {
     const dominantLevel = Object.entries(levels).sort((a, b) => b[1] - a[1])[0][0];
     const labels = {
@@ -1382,16 +1367,10 @@ async function calculateTrafficRoute(destinationText) {
   const minutes = Math.round(bestRoute.duration / 60);
   const kilometers = (bestRoute.distance / 1000).toFixed(1);
 
-  let answer =
-    `Destino: ${destinationName}.\n\n` +
-    `Estado del tráfico: ${trafficStatus}.\n` +
-    `Tiempo estimado: ${minutes} minutos.\n` +
-    `Distancia: ${kilometers} kilómetros.\n\n` +
-    `He seleccionado la ruta más rápida disponible según el tráfico actual.`;
-
-  if (trafficStatus === "sin datos suficientes") {
-    answer += "\nNo recibí información suficiente para clasificar la congestión por tramos.";
-  }
+  // Respuesta corta, directa y natural
+  const answer =
+    `Hacia ${destinationName}: tráfico ${trafficStatus}. ` +
+    `Tiempo estimado de ${minutes} minutos (${kilometers} km).`;
 
   return {
     answer,
@@ -1401,7 +1380,6 @@ async function calculateTrafficRoute(destinationText) {
     destinationName
   };
 }
-
 function showTrafficNavigationOptions(result) {
 
   const container = document.createElement("div");
