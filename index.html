@@ -1214,7 +1214,7 @@ async function sendMessage() {
   if (!text || busy || initializing) return;
   const comando = text.toLowerCase();
   const solicitudWhatsApp = text.match(
-  /(?:env[ií]a|manda|envia)\s+(?:un\s+)?mensaje(?:\s+por\s+whatsapp|\s+de\s+whatsapp)?\s+a\s+(.+)/i
+/(?:env[ií]a|enviar|manda|mandar)\s+(?:un\s+)?mensaje(?:\s+por\s+whatsapp|\s+de\s+whatsapp)?\s+a\s+(.+)/i
 );
 
 if (solicitudWhatsApp) {
