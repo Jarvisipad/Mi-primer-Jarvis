@@ -1867,6 +1867,7 @@ if (pendingTrafficOrigin) {
     return;
 
   } catch (error) {
+  pendingTrafficOrigin = null;
     const answer = "No pude calcular la ruta. " + error.message +
       " Puedes indicarme otro destino.";
     addMessage("assistant", answer);
