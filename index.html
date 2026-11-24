@@ -697,6 +697,57 @@ button:active { transform:scale(.98); }
     border-color: #43edff;
   }
 }
+/* ESCANEO HOLOGRÁFICO DE LOS PANELES */
+@keyframes hologram-scan {
+  from {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  15% { opacity: .65; }
+  85% { opacity: .65; }
+  to {
+    transform: translateY(350%);
+    opacity: 0;
+  }
+}
+
+.panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.left-panel,
+.right-panel {
+  position: sticky;
+  top: 12px;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 35%;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    #43edff18,
+    #43edff55,
+    #168cff18,
+    transparent
+  );
+  animation: hologram-scan 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel::after {
+    animation: none;
+    display: none;
+  }
+}
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
