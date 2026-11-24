@@ -671,6 +671,32 @@ button:active { transform:scale(.98); }
     animation: none !important;
   }
 }
+/* ENERGÍA HOLOGRÁFICA INTERACTIVA */
+@keyframes panel-energy {
+  from {
+    border-color: #168cff;
+    box-shadow: 0 0 12px #008cff35,
+                inset 0 0 12px #00bfff10;
+  }
+  to {
+    border-color: #43edff;
+    box-shadow: 0 0 28px #00cfff70,
+                inset 0 0 24px #00bfff20;
+  }
+}
+
+.panel:hover,
+.panel:focus-within {
+  animation: panel-energy 2s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel:hover,
+  .panel:focus-within {
+    animation: none;
+    border-color: #43edff;
+  }
+}
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
