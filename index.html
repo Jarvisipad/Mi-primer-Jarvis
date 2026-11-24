@@ -789,6 +789,130 @@ button:active { transform:scale(.98); }
     animation: none !important;
   }
 }
+/* =====================================
+   JARVIS · ACABADO HOLOGRÁFICO FINAL
+   ===================================== */
+
+/* TRANSICIONES ENTRE ESTADOS */
+.core,
+.core-halo,
+.core-grid,
+.core-ring,
+.core-particle,
+.visualizer i {
+  transition:
+    filter .4s ease,
+    opacity .4s ease,
+    box-shadow .4s ease;
+}
+
+/* PARTÍCULAS DE ENERGÍA */
+@keyframes particle-energy {
+  0%, 100% {
+    opacity: .55;
+    filter: brightness(.8);
+    box-shadow: 0 0 7px 2px #20cfff;
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.8);
+    box-shadow:
+      0 0 12px 5px #20dfff,
+      0 0 25px 8px #168cff;
+  }
+}
+
+.core-particle {
+  animation:
+    particle-float 3.5s ease-in-out infinite,
+    particle-energy 2s ease-in-out infinite;
+}
+
+.core-particle.p-two {
+  animation-delay: .3s, .5s;
+}
+
+.core-particle.p-three {
+  animation-delay: .6s, 1s;
+}
+
+.core-particle.p-four {
+  animation-delay: .4s, .7s;
+}
+
+.core-particle.p-five {
+  animation-delay: .8s, 1.2s;
+}
+
+/* ENERGÍA AL ESCUCHAR */
+.core.is-listening .core-particle {
+  box-shadow:
+    0 0 16px 6px #43edff,
+    0 0 30px 10px #168cff;
+  filter: brightness(1.7);
+}
+
+.core.is-listening .core-halo {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 55px #43edff,
+    0 0 45px #168cff;
+}
+
+/* ENERGÍA AL RESPONDER */
+.core.is-speaking .core-particle {
+  animation-duration: 1.2s, .7s;
+}
+
+.core.is-speaking .core-halo {
+  box-shadow:
+    inset 0 0 65px #43edff,
+    0 0 55px #168cff;
+}
+
+/* ONDAS DE VOZ MÁS DINÁMICAS */
+@keyframes voice-energy {
+  0% {
+    transform: scaleY(.25);
+    opacity: .5;
+  }
+  100% {
+    transform: scaleY(1.5);
+    opacity: 1;
+  }
+}
+
+.visualizer.is-active i {
+  animation-name: voice-energy;
+  animation-duration: .35s;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  box-shadow:
+    0 0 10px #43edff,
+    0 0 20px #168cff;
+}
+
+.visualizer.is-active i:nth-child(3n) {
+  animation-duration: .22s;
+}
+
+.visualizer.is-active i:nth-child(4n) {
+  animation-duration: .48s;
+}
+
+/* ESTADO DE REPOSO */
+.visualizer:not(.is-active) i {
+  opacity: .45;
+  animation-duration: 1.5s;
+}
+
+/* RESPETO A MOVIMIENTO REDUCIDO */
+@media (prefers-reduced-motion: reduce) {
+  .core-particle,
+  .visualizer i {
+    animation: none !important;
+  }
+}
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
