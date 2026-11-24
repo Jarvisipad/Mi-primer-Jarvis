@@ -618,6 +618,59 @@ button:active { transform:scale(.98); }
     transition: none !important;
   }
 }
+/* ENTRADA HOLOGRÁFICA DE LOS PANELES */
+@keyframes hologram-entry {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: brightness(.65) blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: brightness(1) blur(0);
+  }
+}
+
+.dashboard > .left-panel {
+  animation: hologram-entry .8s ease-out both;
+}
+
+.dashboard > .center-panel {
+  animation: hologram-entry 1s ease-out .15s both;
+}
+
+.dashboard > .right-panel {
+  animation: hologram-entry .8s ease-out .3s both;
+}
+
+.chat-panel,
+#agendaPanel,
+#memoryPanel {
+  animation: hologram-entry .8s ease-out both;
+}
+
+.panel {
+  transition: border-color .35s ease, box-shadow .35s ease;
+}
+
+.panel:hover {
+  border-color: #43edff;
+  box-shadow:
+    0 0 22px #008cff35,
+    inset 0 0 22px #00bfff12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard > .left-panel,
+  .dashboard > .center-panel,
+  .dashboard > .right-panel,
+  .chat-panel,
+  #agendaPanel,
+  #memoryPanel {
+    animation: none !important;
+  }
+}
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
