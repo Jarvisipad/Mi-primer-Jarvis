@@ -748,6 +748,47 @@ button:active { transform:scale(.98); }
     display: none;
   }
 }
+/* PULSACIÓN DE ENERGÍA DEL NÚCLEO JARVIS */
+
+@keyframes core-energy-idle {
+  0%, 100% {
+    box-shadow: 0 0 15px #168cff55, 0 0 30px #00bfff22;
+  }
+  50% {
+    box-shadow: 0 0 28px #168cffaa, 0 0 55px #00dfff55;
+  }
+}
+
+@keyframes core-energy-active {
+  0%, 100% {
+    box-shadow: 0 0 22px #00cfff88, 0 0 40px #168cff55;
+  }
+  50% {
+    box-shadow: 0 0 42px #43edff, 0 0 75px #168cffaa;
+  }
+}
+
+.core {
+  animation: core-energy-idle 4s ease-in-out infinite;
+}
+
+.core.is-listening {
+  animation: core-energy-active 1.4s ease-in-out infinite;
+}
+
+.core.is-speaking {
+  animation: core-energy-active .8s ease-in-out infinite;
+}
+
+.core.is-processing {
+  animation: core-energy-active 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core {
+    animation: none !important;
+  }
+}
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
