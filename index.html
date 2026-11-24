@@ -19,12 +19,26 @@
 body {
   margin:0;
   min-height:100vh;
+  position:relative;
+  overflow-x:hidden;
   background:
-    radial-gradient(ellipse at 50% 35%,#092c50 0%,transparent 48%),
+    radial-gradient(ellipse at 50% 32%,#0b3156 0%,transparent 43%),
+    radial-gradient(ellipse at 12% 80%,#06234488 0%,transparent 38%),
     linear-gradient(135deg,#020711,#061629 55%,#020711);
   color:var(--text);
   font-family:Arial,sans-serif;
   padding:16px;
+}
+body::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:-1;
+  opacity:.42;
+  background-image:radial-gradient(#72dfff 0.7px, transparent 0.9px);
+  background-size:38px 38px;
+  mask-image:linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
 }
 header {
   display:flex;
@@ -33,7 +47,8 @@ header {
   max-width:1250px;
   margin:auto;
   padding:10px 5px 20px;
-  border-bottom:1px solid #174667;
+  border-bottom:1px solid #1a668c;
+  box-shadow:0 10px 30px -28px #42eaff;
 }
 .logo {
   color:var(--cyan);
@@ -67,10 +82,11 @@ header {
 }
 .panel {
   background:linear-gradient(145deg,#0b2036dd,#061322ee);
-  border:1px solid #14517a;
+  border:1px solid #1b6388;
   border-radius:16px;
   padding:16px;
-  box-shadow:0 0 25px #007bba18,inset 0 0 20px #008cff08;
+  box-shadow:0 0 28px #007bba22,inset 0 0 24px #008cff0c;
+  backdrop-filter:blur(12px);
 }
 .section-title {
   color:var(--cyan);
@@ -99,43 +115,128 @@ header {
   text-align:center;
 }
 .core {
-  width:190px;
-  height:190px;
+  --core-size: clamp(190px, 25vw, 270px);
+  width:var(--core-size);
+  height:var(--core-size);
+  flex:0 0 auto;
   border-radius:50%;
-  margin:8px auto 15px;
+  margin:30px auto 34px;
   display:flex;
   justify-content:center;
   align-items:center;
   position:relative;
-  background:radial-gradient(circle,#167fba 0%,#0a355d 35%,#06172c 65%,transparent 72%);
-  border:1px solid #38dfff;
-  box-shadow:0 0 20px #00aeff80,inset 0 0 25px #00aeff55;
-  animation:pulse 4s infinite ease-in-out;
+  isolation:isolate;
+  background:
+    radial-gradient(circle at 50% 45%, #d9fbff 0 1.5%, #6ceaff 3%, #168cff 12%, #07518f 29%, #031a35 55%, #020a18 68%, transparent 72%);
+  border:1px solid #76edff;
+  box-shadow:
+    0 0 18px #00cfff,
+    0 0 48px #008cff99,
+    0 0 95px #006bff55,
+    inset 0 0 28px #42eaffaa,
+    inset 0 0 70px #006dff88;
+  animation:core-breathe 4.8s ease-in-out infinite;
 }
-.core:before,.core:after {
+.core::before,
+.core::after {
   content:"";
   position:absolute;
-  inset:-12px;
-  border:1px solid #27bfff88;
+  z-index:-1;
+  inset:-13%;
+  border:1px solid #54dfffaa;
   border-radius:50%;
-  animation:spin 12s linear infinite;
+  transform:rotateX(68deg) rotateZ(-18deg);
+  box-shadow:0 0 14px #00bfff55;
+  animation:orbit-spin 13s linear infinite;
 }
-.core:after {
-  inset:-24px;
-  border-color:#168cff55;
-  animation-direction:reverse;
-  animation-duration:18s;
+.core::after {
+  inset:-21%;
+  border-color:#168cff99;
+  border-style:dashed;
+  transform:rotateX(72deg) rotateZ(35deg);
+  animation:orbit-spin-reverse 19s linear infinite;
 }
+.core-halo {
+  position:absolute;
+  inset:10%;
+  border-radius:50%;
+  background:radial-gradient(circle, #72eaff22 0 35%, transparent 70%);
+  box-shadow:inset 0 0 25px #35dfff55;
+  animation:halo-pulse 3.5s ease-in-out infinite;
+}
+.core-orbit {
+  position:absolute;
+  inset:-7%;
+  border:1px solid #9af5ff99;
+  border-radius:50%;
+  transform:rotateX(72deg) rotateZ(12deg);
+  animation:orbit-spin 8s linear infinite;
+}
+.core-orbit.orbit-two {
+  inset:-16%;
+  border-color:#168cff99;
+  border-style:dotted;
+  transform:rotateX(70deg) rotateZ(78deg);
+  animation:orbit-spin-reverse 15s linear infinite;
+}
+.core-orbit::before,
+.core-orbit::after {
+  content:"";
+  position:absolute;
+  width:7px;
+  height:7px;
+  top:50%;
+  left:-3px;
+  border-radius:50%;
+  background:#c9fbff;
+  box-shadow:0 0 8px 3px #22dfff, 0 0 18px #168cff;
+}
+.core-orbit::after {
+  top:auto;
+  left:auto;
+  right:-3px;
+  bottom:50%;
+  width:4px;
+  height:4px;
+}
+.core-scan {
+  position:absolute;
+  inset:18%;
+  border-radius:50%;
+  border:1px solid #5beaff44;
+  background:repeating-linear-gradient(0deg, transparent 0 9px, #42eaff12 10px 11px);
+  mask-image:radial-gradient(circle, black 45%, transparent 73%);
+  animation:scan-turn 22s linear infinite;
+}
+.core-particle {
+  position:absolute;
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:#d9fcff;
+  box-shadow:0 0 9px 3px #20cfff;
+}
+.core-particle.p-one { top:12%; left:24%; animation:particle-float 3s ease-in-out infinite; }
+.core-particle.p-two { right:13%; top:39%; animation:particle-float 4s ease-in-out infinite reverse; }
+.core-particle.p-three { bottom:15%; left:34%; animation:particle-float 3.6s ease-in-out infinite .6s; }
 .core span {
-  color:#baf6ff;
-  font-size:35px;
-  font-weight:bold;
-  text-shadow:0 0 20px #00cfff;
+  position:relative;
+  z-index:2;
+  color:#e5fdff;
+  font-size:clamp(42px, 6vw, 58px);
+  font-weight:300;
+  letter-spacing:3px;
+  text-shadow:0 0 8px #fff, 0 0 24px #00dfff, 0 0 48px #168cff;
 }
-@keyframes pulse {
-  50% { box-shadow:0 0 45px #00aeffaa,inset 0 0 35px #00aeff88; }
+@keyframes core-breathe {
+  0%,100% { filter:brightness(.94); transform:scale(.985); }
+  50% { filter:brightness(1.18); transform:scale(1.025); }
 }
-@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes orbit-spin { to { transform:rotateX(68deg) rotateZ(342deg); } }
+@keyframes orbit-spin-reverse { to { transform:rotateX(72deg) rotateZ(-325deg); } }
+@keyframes halo-pulse { 50% { opacity:.55; transform:scale(1.08); } }
+@keyframes scan-turn { to { transform:rotate(360deg); } }
+@keyframes particle-float { 50% { transform:translate(7px,-10px); opacity:.45; } }
 #state {
   color:var(--cyan);
   font-size:11px;
@@ -244,17 +345,21 @@ footer {
   .left-panel { order:2; }
   .center-panel { order:1; }
   .right-panel { order:3; }
-  .core { width:155px;height:155px; }
+  .core { --core-size:190px; }
   #chat { height:35vh;min-height:230px; }
 }
 @media(max-width:480px) {
   body { padding:9px; }
+  .core { --core-size:175px; margin:26px auto 30px; }
   header { padding:10px 3px 15px; }
   .logo { font-size:22px;letter-spacing:4px; }
   #clock { font-size:16px; }
   .controls { flex-wrap:wrap; }
   .controls input { flex-basis:100%; }
   .controls button { flex:1; }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
 }
 </style>
   <link rel="manifest" href="./manifest.webmanifest">
@@ -298,7 +403,16 @@ footer {
   <section class="center-panel">
     <div class="panel center">
       <div class="section-title">NÚCLEO DE INTELIGENCIA ARTIFICIAL</div>
-      <div class="core"><span>J</span></div>
+      <div class="core" aria-label="Núcleo holográfico de JARVIS">
+        <div class="core-halo"></div>
+        <div class="core-orbit orbit-one"></div>
+        <div class="core-orbit orbit-two"></div>
+        <div class="core-scan"></div>
+        <i class="core-particle p-one"></i>
+        <i class="core-particle p-two"></i>
+        <i class="core-particle p-three"></i>
+        <span>J</span>
+      </div>
       <div id="state">JARVIS INICIANDO...</div>
       <div class="visualizer" id="visualizer">
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
