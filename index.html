@@ -3113,7 +3113,7 @@ let voiceCommandPending = false;
 let responseSpeaking = false;
 let pendingStopConfirmation = false;
 let restartTimer = null;
-
+let restartAttempts = 0;
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -3206,29 +3206,45 @@ if (SpeechRecognition) {
     }
   }
 
-  function scheduleHandsFreeRestart(delay = 500) {
-    clearTimeout(restartTimer);
+function scheduleHandsFreeRestart(delay = 600) {
+  clearTimeout(restartTimer);
 
-    if (!handsFreeMode) return;
+  if (!handsFreeMode) return;
 
-    restartTimer = setTimeout(() => {
-      if (!handsFreeMode || document.hidden) return;
+  restartTimer = setTimeout(() => {
+    if (!handsFreeMode || document.hidden) return;
 
-      if (
-        recognitionRunning ||
-        recognitionStartPending ||
-        voiceCommandPending ||
-        busy ||
-        initializing ||
-        responseSpeaking
-      ) {
-        scheduleHandsFreeRestart(700);
-        return;
-      }
+    if (
+      recognitionRunning ||
+      recognitionStartPending ||
+      voiceCommandPending ||
+      busy ||
+      initializing
+    ) {
+      scheduleHandsFreeRestart(600);
+      return;
+    }
 
-      promptAndListen();
-    }, delay);
-  }
+    const speechBusy =
+      "speechSynthesis" in window &&
+      (speechSynthesis.speaking || speechSynthesis.pending);
+
+    if (speechBusy && restartAttempts < 30) {
+      restartAttempts++;
+      scheduleHandsFreeRestart(600);
+      return;
+    }
+
+    if (speechBusy) {
+      speechSynthesis.cancel();
+      responseSpeaking = false;
+    }
+
+    restartAttempts = 0;
+    promptAndListen();
+
+  }, delay);
+}
 
   recognition.onstart = () => {
     recognitionStartPending = false;
