@@ -3208,6 +3208,11 @@ if (SpeechRecognition) {
   }
 
 function scheduleHandsFreeRestart(delay = 600) {
+  restartHandsFreeListening = (delay = 500) => {
+  if (handsFreeMode) {
+    scheduleHandsFreeRestart(delay);
+  }
+};
   clearTimeout(restartTimer);
 
   if (!handsFreeMode) return;
