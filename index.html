@@ -1822,6 +1822,9 @@ if ("serviceWorker" in navigator) {
 let conversation = [];
 let speakingEnabled = true;
 let recognition = null;
+let handsFreeMode = false;
+let responseSpeaking = false;
+let restartHandsFreeListening = null;
 let busy = false;
 let initializing = true;
 
@@ -2391,7 +2394,7 @@ const monthNames = {
 };
 
 const numericDate = question.match(
-  /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
+ /\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/
 );
 
 const writtenDate = question.match(
@@ -3105,15 +3108,11 @@ $("command").addEventListener("keydown",event => {
 
 
 /* VOZ · MODO MANOS LIBRES */
-
-let handsFreeMode = false;
 let recognitionRunning = false;
 let recognitionStartPending = false;
 let voiceCommandPending = false;
-let responseSpeaking = false;
 let pendingStopConfirmation = false;
 let restartTimer = null;
-let restartHandsFreeListening = null;
 let restartAttempts = 0;
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3208,11 +3207,6 @@ if (SpeechRecognition) {
   }
 
 function scheduleHandsFreeRestart(delay = 600) {
-  restartHandsFreeListening = (delay = 500) => {
-  if (handsFreeMode) {
-    scheduleHandsFreeRestart(delay);
-  }
-};
   clearTimeout(restartTimer);
 
   if (!handsFreeMode) return;
@@ -3251,7 +3245,11 @@ function scheduleHandsFreeRestart(delay = 600) {
 
   }, delay);
 }
-
+restartHandsFreeListening = (delay = 500) => {
+  if (handsFreeMode) {
+    scheduleHandsFreeRestart(delay);
+  }
+};
   recognition.onstart = () => {
     recognitionStartPending = false;
     recognitionRunning = true;
@@ -3452,10 +3450,9 @@ function speak(text) {
   utterance.onend = () => {
     responseSpeaking = false;
     setState("JARVIS LISTO");
-
-    if (handsFreeMode) {
-      scheduleHandsFreeRestart(500);
-    }
+if (handsFreeMode && restartHandsFreeListening) {
+  restartHandsFreeListening(500);
+}
   };
 
   utterance.onerror = event => {
@@ -3464,9 +3461,9 @@ function speak(text) {
     console.error("Error de voz:", event.error);
     setState("ERROR DE REPRODUCCIÓN DE VOZ");
 
-    if (handsFreeMode) {
-      scheduleHandsFreeRestart(1000);
-    }
+if (handsFreeMode && restartHandsFreeListening) {
+  restartHandsFreeListening(1000);
+}
   };
 
   window.speechSynthesis.speak(utterance);
