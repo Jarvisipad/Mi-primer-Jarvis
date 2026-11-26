@@ -3103,7 +3103,287 @@ $("command").addEventListener("keydown",event => {
   if (event.key === "Enter") sendMessage();
 });
 
-/* VOZ */
+
+/* VOZ · MODO MANOS LIBRES */
+
+let handsFreeMode = false;
+let recognitionRunning = false;
+let recognitionStartPending = false;
+let voiceCommandPending = false;
+let responseSpeaking = false;
+let pendingStopConfirmation = false;
+let restartTimer = null;
+
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = "es-CO";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  function updateHandsFreeButton() {
+    $("voice").textContent = handsFreeMode
+      ? "🎙 MANOS LIBRES ACTIVO"
+      : "🎙 ACTIVAR MANOS LIBRES";
+
+    $("voiceStatus").textContent = handsFreeMode
+      ? "◈ Micrófono: modo manos libres"
+      : "◈ Micrófono: disponible";
+  }
+
+  function startRecognitionNow() {
+    if (
+      !handsFreeMode ||
+      recognitionRunning ||
+      recognitionStartPending ||
+      voiceCommandPending ||
+      busy ||
+      initializing ||
+      document.hidden
+    ) {
+      return;
+    }
+
+    recognitionStartPending = true;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      recognitionStartPending = false;
+      console.warn("No se pudo iniciar el reconocimiento:", error);
+
+      if (error.name !== "InvalidStateError" && handsFreeMode) {
+        scheduleHandsFreeRestart(1500);
+      }
+    }
+  }
+
+  function promptAndListen() {
+    if (
+      !handsFreeMode ||
+      recognitionRunning ||
+      voiceCommandPending ||
+      busy ||
+      initializing ||
+      document.hidden
+    ) {
+      return;
+    }
+
+    if ("speechSynthesis" in window) {
+      const promptVoice = new SpeechSynthesisUtterance("Te escucho.");
+      promptVoice.lang = "es-CO";
+      promptVoice.rate = 1;
+      promptVoice.pitch = 0.95;
+
+      promptVoice.onstart = () => {
+        setState("JARVIS HABLANDO...");
+      };
+
+      promptVoice.onend = () => {
+        if (handsFreeMode) {
+          startRecognitionNow();
+        }
+      };
+
+      promptVoice.onerror = () => {
+        if (handsFreeMode) {
+          startRecognitionNow();
+        }
+      };
+
+      try {
+        window.speechSynthesis.speak(promptVoice);
+      } catch (error) {
+        console.warn("Error preparando la escucha:", error);
+        startRecognitionNow();
+      }
+    } else {
+      startRecognitionNow();
+    }
+  }
+
+  function scheduleHandsFreeRestart(delay = 500) {
+    clearTimeout(restartTimer);
+
+    if (!handsFreeMode) return;
+
+    restartTimer = setTimeout(() => {
+      if (!handsFreeMode || document.hidden) return;
+
+      if (
+        recognitionRunning ||
+        recognitionStartPending ||
+        voiceCommandPending ||
+        busy ||
+        initializing ||
+        responseSpeaking
+      ) {
+        scheduleHandsFreeRestart(700);
+        return;
+      }
+
+      promptAndListen();
+    }, delay);
+  }
+
+  recognition.onstart = () => {
+    recognitionStartPending = false;
+    recognitionRunning = true;
+
+    setState("ESCUCHANDO...");
+    $("voiceStatus").textContent = "◈ Micrófono: escuchando";
+  };
+
+  recognition.onresult = async event => {
+    const result = event.results[event.resultIndex];
+
+    if (!result || !result.isFinal) return;
+
+    const spokenText = result[0].transcript.trim();
+
+    if (!spokenText) return;
+
+    const normalizedText = spokenText
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+    /* DETENER LA ESCUCHA POR VOZ */
+    const stopCommand =
+      /^(?:jarvis[\s,:-]*)?(?:detente|para|deja de escuchar|deten la escucha|detener la escucha|desactiva el modo manos libres|desactivar el modo manos libres|apaga la escucha)$/i;
+
+    if (stopCommand.test(normalizedText)) {
+      addMessage("user", spokenText);
+
+      handsFreeMode = false;
+      pendingStopConfirmation = true;
+
+      clearTimeout(restartTimer);
+      updateHandsFreeButton();
+
+      return;
+    }
+
+    $("command").value = spokenText;
+    voiceCommandPending = true;
+
+    try {
+      await sendMessage();
+
+      /* Evitar que aparezca el teclado del iPad */
+      $("command").blur();
+
+    } catch (error) {
+      console.error("Error procesando la orden de voz:", error);
+
+    } finally {
+      voiceCommandPending = false;
+
+      if (handsFreeMode && !responseSpeaking) {
+        scheduleHandsFreeRestart(500);
+      }
+    }
+  };
+
+  recognition.onerror = event => {
+    recognitionStartPending = false;
+
+    console.error("Error de reconocimiento:", event.error);
+
+    $("voiceStatus").textContent =
+      "◈ Micrófono: " + event.error;
+
+    if (
+      event.error === "not-allowed" ||
+      event.error === "service-not-allowed" ||
+      event.error === "audio-capture"
+    ) {
+      handsFreeMode = false;
+      clearTimeout(restartTimer);
+      updateHandsFreeButton();
+
+      setState("REVISAR PERMISO DEL MICRÓFONO");
+    }
+  };
+
+  recognition.onend = () => {
+    recognitionRunning = false;
+    recognitionStartPending = false;
+
+    if (pendingStopConfirmation) {
+      pendingStopConfirmation = false;
+
+      const answer = "De acuerdo. Modo manos libres desactivado.";
+      addMessage("assistant", answer);
+      setState("JARVIS LISTO");
+      speak(answer);
+
+      return;
+    }
+
+    if (handsFreeMode) {
+      $("voiceStatus").textContent =
+        "◈ Micrófono: preparando siguiente escucha";
+
+      if (!voiceCommandPending && !busy && !responseSpeaking) {
+        scheduleHandsFreeRestart(500);
+      }
+    } else {
+      $("voiceStatus").textContent = "◈ Micrófono: disponible";
+      setState("JARVIS LISTO");
+    }
+  };
+
+  /* ACTIVAR O DESACTIVAR MODO MANOS LIBRES */
+  $("voice").addEventListener("click", () => {
+    if (handsFreeMode) {
+      handsFreeMode = false;
+      clearTimeout(restartTimer);
+      updateHandsFreeButton();
+
+      if (recognitionRunning || recognitionStartPending) {
+        setState("TERMINANDO ESCUCHA...");
+      } else {
+        setState("MODO MANOS LIBRES DESACTIVADO");
+      }
+
+      return;
+    }
+
+    handsFreeMode = true;
+    updateHandsFreeButton();
+
+    setState("PREPARANDO MODO MANOS LIBRES...");
+   promptAndListen();
+  });
+
+  /* REANUDAR AL VOLVER A JARVIS */
+  document.addEventListener("visibilitychange", () => {
+    if (
+      !document.hidden &&
+      handsFreeMode &&
+      !recognitionRunning
+    ) {
+      scheduleHandsFreeRestart(700);
+    }
+  });
+
+  updateHandsFreeButton();
+
+} else {
+  $("voice").disabled = true;
+  $("voice").textContent = "VOZ NO DISPONIBLE";
+  $("voiceStatus").textContent =
+    "◈ Micrófono: navegador no compatible";
+}
+
+/* VOZ DE RESPUESTA DE JARVIS */
+
 function speak(text) {
   if (!speakingEnabled || !("speechSynthesis" in window)) return;
 
@@ -3118,22 +3398,24 @@ function speak(text) {
   window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
+
   utterance.lang = "es-CO";
-utterance.rate = 0.92;
-utterance.pitch = 0.85;
+  utterance.rate = 0.92;
+  utterance.pitch = 0.85;
 
   const voices = window.speechSynthesis.getVoices();
 
   const isIPad =
     /iPad/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    (navigator.platform === "MacIntel" &&
+      navigator.maxTouchPoints > 1);
 
   if (isIPad) {
-  const carlosVoice = voices.find(voice =>
-  voice.name.toLowerCase().includes("carlos") &&
-  voice.name.toLowerCase().includes("mejorada") &&
-  voice.lang.toLowerCase().includes("es")
-);
+    const carlosVoice = voices.find(voice =>
+      voice.name.toLowerCase().includes("carlos") &&
+      voice.name.toLowerCase().includes("mejorada") &&
+      voice.lang.toLowerCase().includes("es")
+    );
 
     if (carlosVoice) {
       utterance.voice = carlosVoice;
@@ -3141,96 +3423,46 @@ utterance.pitch = 0.85;
   }
 
   utterance.onstart = () => {
+    responseSpeaking = true;
     setState("JARVIS HABLANDO...");
   };
 
   utterance.onend = () => {
+    responseSpeaking = false;
     setState("JARVIS LISTO");
+
+    if (handsFreeMode) {
+      scheduleHandsFreeRestart(500);
+    }
   };
 
-  utterance.onerror = (event) => {
+  utterance.onerror = event => {
+    responseSpeaking = false;
+
     console.error("Error de voz:", event.error);
     setState("ERROR DE REPRODUCCIÓN DE VOZ");
+
+    if (handsFreeMode) {
+      scheduleHandsFreeRestart(1000);
+    }
   };
 
   window.speechSynthesis.speak(utterance);
 }
-$("speak").addEventListener("click",() => {
+
+/* ACTIVAR O DESACTIVAR VOZ DE RESPUESTA */
+
+$("speak").addEventListener("click", () => {
   speakingEnabled = !speakingEnabled;
-  $("speak").textContent = speakingEnabled ? "🔊 VOZ ACTIVADA" : "🔇 VOZ DESACTIVADA";
-  if (!speakingEnabled && "speechSynthesis" in window) speechSynthesis.cancel();
-});
 
-/* RECONOCIMIENTO DE VOZ */
-const SpeechRecognition =
-  window.SpeechRecognition || window.webkitSpeechRecognition;
+  $("speak").textContent = speakingEnabled
+    ? "🔊 VOZ ACTIVADA"
+    : "🔇 VOZ DESACTIVADA";
 
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.lang = "es-CO";
-  recognition.continuous = false;
-  recognition.interimResults = false;
-
-  recognition.onstart = () => {
-    setState("ESCUCHANDO...");
-    $("voiceStatus").textContent = "◈ Micrófono: escuchando";
-  };
-
-recognition.onresult = async event => {
-  const spokenText = event.results[0][0].transcript;
-
-  $("command").value = spokenText;
-
-  await sendMessage();
-};
-
-  recognition.onerror = event => {
-    setState("ERROR DE MICRÓFONO: " + event.error);
-    $("voiceStatus").textContent = "◈ Micrófono: revisar permiso";
-  };
-
-  recognition.onend = () => {
-    $("voiceStatus").textContent = "◈ Micrófono: disponible";
-  };
-
-$("voice").addEventListener("click", () => {
-  try {
-    if ("speechSynthesis" in window && speakingEnabled) {
-      speechSynthesis.cancel();
-
-      const unlockVoice = new SpeechSynthesisUtterance("Te escucho.");
-      unlockVoice.lang = "es-CO";
-      unlockVoice.rate = 1;
-
-      unlockVoice.onend = () => {
-        try {
-          recognition.start();
-        } catch (error) {
-          console.warn(error);
-        }
-      };
-
-      unlockVoice.onerror = () => {
-        try {
-          recognition.start();
-        } catch (error) {
-          console.warn(error);
-        }
-      };
-
-      speechSynthesis.speak(unlockVoice);
-    } else {
-      recognition.start();
-    }
-  } catch (error) {
-    console.warn(error);
+  if (!speakingEnabled && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
   }
 });
-} else {
-  $("voice").disabled = true;
-  $("voice").textContent = "VOZ NO DISPONIBLE";
-  $("voiceStatus").textContent = "◈ Micrófono: navegador no compatible";
-}
 
 /* GUARDAR MEMORIA */
 $("remember").addEventListener("click", () => {
