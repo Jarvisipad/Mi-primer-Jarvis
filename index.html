@@ -3398,11 +3398,6 @@ $("command").value = spokenText;
 voiceCommandPending = true;
 
 try {
-  try {
-    recognition.stop();
-  } catch (error) {
-    console.debug("La escucha ya había terminado.");
-  }
 
   await sendMessage();
   $("command").blur();
