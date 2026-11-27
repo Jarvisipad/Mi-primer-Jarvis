@@ -340,12 +340,18 @@ recognition.onend = () => {
 };
 }
 startButton.addEventListener("click", () => {
-  if (!recognition) return;
+  if (!recognition) {
+    updateStatus("Reconocimiento de voz no disponible.");
+    return;
+  }
 
   listeningRequested = true;
   mode = "wake";
   greetingPending = false;
   commandPending = false;
+  commandText = "";
+
+  clearTimeout(restartTimer);
 
   resultText.textContent = "Esperando que digas Hola JARVIS.";
 
@@ -354,39 +360,9 @@ startButton.addEventListener("click", () => {
 
   recognition.continuous = true;
 
-  const unlockVoice = new SpeechSynthesisUtterance(
-    "Sistema de voz activado."
-  );
+  updateStatus("ACTIVANDO MICRÓFONO...");
 
-  unlockVoice.lang = "es-CO";
-
-  unlockVoice.onend = () => {
-    if (listeningRequested) startRecognition();
-  };
-
-  unlockVoice.onerror = () => {
-    if (listeningRequested) startRecognition();
-  };
-
-  speechSynthesis.cancel();
-  speechSynthesis.speak(unlockVoice);
-});
-
-stopButton.addEventListener("click", () => {
-  listeningRequested = false;
-
-  clearTimeout(restartTimer);
-
-  if (recognition) {
-    recognition.stop();
-  }
-
-  speechSynthesis.cancel();
-
-  startButton.disabled = false;
-  stopButton.disabled = true;
-
-  updateStatus("Prueba detenida");
+  startRecognition();
 });
 </script>
 </body>
