@@ -3275,9 +3275,9 @@ recognition.onresult = async event => {
     .replace(/\s+/g, " ")
     .trim();
 
-  // COMANDO PARA DESCANSAR Y APAGAR EL MICRÓFONO
+  // 1. COMANDO PARA DESCANSAR
   const stopCommand =
-    /^(?:jarvis )?descansa(?: jarvis)?$/i;
+    /^(?:(?:jarvis)\s+)?descansa(?:\s+jarvis)?$/i;
 
   if (
     stopCommand.test(normalizedText) ||
@@ -3296,10 +3296,12 @@ recognition.onresult = async event => {
     return;
   }
 
-  // ESPERAR LA FRASE HOLA JARVIS
-  if (waitingForWakeWord) {
-    if (!normalizedText.includes("hola jarvis")) return;
+  // 2. DETECTAR HOLA JARVIS SIEMPRE, ANTES DE ENVIAR A GROQ
+  const isWakeWord =
+    /^(?:hola\s+jarvis|hola\s+jarvi|ola\s+jarvis|jarvis\s+hola)$/i
+      .test(normalizedText);
 
+  if (isWakeWord) {
     addMessage("user", spokenText);
 
     waitingForWakeWord = false;
@@ -3307,6 +3309,7 @@ recognition.onresult = async event => {
 
     recognition.stop();
 
+    // SALUDO SEGÚN LA HORA DE COLOMBIA
     const horaActual = Number(
       new Intl.DateTimeFormat("es-CO", {
         hour: "2-digit",
@@ -3325,6 +3328,7 @@ recognition.onresult = async event => {
       saludo = "Buenas noches, señor.";
     }
 
+    // CONSULTAR EL CLIMA DE CALI
     let resumenClima =
       "No pude consultar el clima de Cali en este momento.";
 
@@ -3339,15 +3343,15 @@ recognition.onresult = async event => {
         );
 
         const maxima = reporte.match(
-          /Temperatura máxima:\s*([\d.]+)\s*°C/i
+          /Temperatura máxima:\s*([\d.,]+)\s*°C/i
         );
 
         const minima = reporte.match(
-          /Temperatura mínima:\s*([\d.]+)\s*°C/i
+          /Temperatura mínima:\s*([\d.,]+)\s*°C/i
         );
 
         const lluvia = reporte.match(
-          /Probabilidad máxima de lluvia:\s*(\d+)%/i
+          /Probabilidad máxima de lluvia:\s*(\d+)\s*%/i
         );
 
         if (condicion) {
@@ -3388,7 +3392,12 @@ recognition.onresult = async event => {
     return;
   }
 
-  // PROCESAR LAS ÓRDENES DESPUÉS DEL SALUDO
+  // 3. SI TODAVÍA ESPERA HOLA JARVIS, IGNORAR OTRAS FRASES
+  if (waitingForWakeWord) {
+    return;
+  }
+
+  // 4. PROCESAR LAS ÓRDENES DESPUÉS DEL SALUDO
   $("command").value = spokenText;
   voiceCommandPending = true;
 
