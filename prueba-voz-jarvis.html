@@ -179,6 +179,7 @@ if (!SpeechRecognition) {
       if (!item.isFinal) continue;
 
       const transcript = item[0].transcript.trim();
+      resultText.textContent = "JARVIS ESCUCHÓ: " + transcript;
 
       if (!transcript) continue;
 
