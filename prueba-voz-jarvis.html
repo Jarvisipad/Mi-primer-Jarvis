@@ -278,7 +278,23 @@ startButton.addEventListener("click", () => {
   stopButton.disabled = false;
 
   recognition.continuous = true;
-  startRecognition();
+
+  const unlockVoice = new SpeechSynthesisUtterance(
+    "Sistema de voz activado."
+  );
+
+  unlockVoice.lang = "es-CO";
+
+  unlockVoice.onend = () => {
+    if (listeningRequested) startRecognition();
+  };
+
+  unlockVoice.onerror = () => {
+    if (listeningRequested) startRecognition();
+  };
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(unlockVoice);
 });
 
 stopButton.addEventListener("click", () => {
