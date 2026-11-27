@@ -10,7 +10,7 @@
 :root {
   --cyan:#42eaff;
   --blue:#168cff;
-  --bg:#030914;
+  --bg:#030914;F
   --panel:#09182b;
   --text:#d9f7ff;
   --muted:#719db5;
@@ -3329,7 +3329,6 @@ recognition.onresult = async event => {
   if (isWakeWord) {
     addMessage("user", spokenText);
     voiceCommandPending = true;
-    recognition.stop();
 
     const clock = getBogotaClockParts();
     let respuesta = clock.hour >= 5 && clock.hour < 12
