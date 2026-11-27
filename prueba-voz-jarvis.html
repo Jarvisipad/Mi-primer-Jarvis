@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#030914">
+<title>Prueba de voz JARVIS</title>
+
+<style>
+body {
+  margin: 0;
+  padding: 25px;
+  background: #030914;
+  color: #d9f7ff;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+main {
+  max-width: 600px;
+  margin: 50px auto;
+  padding: 25px;
+  background: #09182b;
+  border: 1px solid #42eaff;
+  border-radius: 18px;
+}
+h1 { color: #42eaff; }
+#status {
+  margin: 25px 0;
+  color: #42eaff;
+  font-size: 18px;
+}
+#result {
+  min-height: 70px;
+  margin: 20px 0;
+  padding: 15px;
+  background: #020914;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+button {
+  margin: 7px;
+  padding: 14px 20px;
+  border: 1px solid #42eaff;
+  border-radius: 9px;
+  background: #07517f;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+button:disabled { opacity: .4; }
+.note {
+  color: #91b8cc;
+  font-size: 13px;
+  line-height: 1.6;
+}
+</style>
+</head>
+
+<body>
+<main>
+  <h1>J.A.R.V.I.S</h1>
+  <p>Prueba de activación por voz</p>
+
+  <div id="status">Sistema preparado</div>
+
+  <div id="result">
+    Esperando la prueba...
+  </div>
+
+  <button id="start">INICIAR PRUEBA</button>
+  <button id="stop" disabled>DETENER</button>
+
+  <p class="note">
+    Di «Hola JARVIS». Escucharás «A sus órdenes, señor».
+    Después di una instrucción y comprueba si la reconoce.
+  </p>
+</main>
+
+<script>
+"use strict";
+
+const SpeechRecognition =
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
+
+const statusText = document.getElementById("status");
+const resultText = document.getElementById("result");
+const startButton = document.getElementById("start");
+const stopButton = document.getElementById("stop");
+
+let recognition = null;
+let listeningRequested = false;
+let mode = "wake";
+let greetingPending = false;
+let commandPending = false;
+let commandText = "";
+let restartTimer = null;
+
+function normalize(text) {
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function updateStatus(text) {
+  statusText.textContent = text;
+}
+
+function startRecognition() {
+  if (!listeningRequested || !recognition) return;
+
+  try {
+    recognition.start();
+  } catch (error) {
+    console.warn("Error iniciando reconocimiento:", error);
+
+    clearTimeout(restartTimer);
+
+    restartTimer = setTimeout(() => {
+      if (listeningRequested) startRecognition();
+    }, 1000);
+  }
+}
+
+function speak(text, callback) {
+  if (!("speechSynthesis" in window)) {
+    if (callback) callback();
+    return;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "es-CO";
+  utterance.rate = 0.95;
+  utterance.pitch = 0.9;
+
+  utterance.onend = () => {
+    if (callback) callback();
+  };
+
+  utterance.onerror = () => {
+    if (callback) callback();
+  };
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
+}
+
+if (!SpeechRecognition) {
+  updateStatus("Este navegador no admite reconocimiento de voz.");
+  startButton.disabled = true;
+} else {
+  recognition = new SpeechRecognition();
+
+  recognition.lang = "es-CO";
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    updateStatus(
+      mode === "wake"
+        ? "ESPERANDO: HOLA JARVIS"
+        : "ESCUCHANDO TU INSTRUCCIÓN"
+    );
+  };
+
+  recognition.onresult = event => {
+    for (
+      let i = event.resultIndex;
+      i < event.results.length;
+      i++
+    ) {
+      const item = event.results[i];
+
+      if (!item.isFinal) continue;
+
+      const transcript = item[0].transcript.trim();
+
+      if (!transcript) continue;
+
+      if (mode === "wake") {
+        const normalized = normalize(transcript);
+
+        if (normalized.includes("hola jarvis")) {
+          mode = "command";
+          greetingPending = true;
+
+          updateStatus("JARVIS ACTIVADO");
+
+          recognition.stop();
+          return;
+        }
+      } else if (mode === "command") {
+        commandText = transcript;
+        commandPending = true;
+
+        recognition.stop();
+        return;
+      }
+    }
+  };
+
+  recognition.onerror = event => {
+    updateStatus("Micrófono: " + event.error);
+
+    if (
+      event.error === "not-allowed" ||
+      event.error === "service-not-allowed" ||
+      event.error === "audio-capture"
+    ) {
+      listeningRequested = false;
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+  };
+
+  recognition.onend = () => {
+    if (!listeningRequested) {
+      updateStatus("Prueba detenida");
+      return;
+    }
+
+    if (greetingPending) {
+      greetingPending = false;
+
+      speak("A sus órdenes, señor.", () => {
+        if (!listeningRequested) return;
+
+        recognition.continuous = false;
+        mode = "command";
+        startRecognition();
+      });
+
+      return;
+    }
+
+    if (commandPending) {
+      commandPending = false;
+
+      resultText.textContent =
+        "Instrucción reconocida: " + commandText;
+
+      commandText = "";
+      mode = "wake";
+      recognition.continuous = true;
+
+      updateStatus("Esperando nuevamente: HOLA JARVIS");
+
+      startRecognition();
+      return;
+    }
+
+    updateStatus("Reanudando escucha...");
+
+    clearTimeout(restartTimer);
+
+    restartTimer = setTimeout(() => {
+      if (listeningRequested) startRecognition();
+    }, 700);
+  };
+}
+
+startButton.addEventListener("click", () => {
+  if (!recognition) return;
+
+  listeningRequested = true;
+  mode = "wake";
+  greetingPending = false;
+  commandPending = false;
+
+  resultText.textContent = "Esperando que digas Hola JARVIS.";
+
+  startButton.disabled = true;
+  stopButton.disabled = false;
+
+  recognition.continuous = true;
+  startRecognition();
+});
+
+stopButton.addEventListener("click", () => {
+  listeningRequested = false;
+
+  clearTimeout(restartTimer);
+
+  if (recognition) {
+    recognition.stop();
+  }
+
+  speechSynthesis.cancel();
+
+  startButton.disabled = false;
+  stopButton.disabled = true;
+
+  updateStatus("Prueba detenida");
+});
+</script>
+</body>
+</html>
