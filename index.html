@@ -3112,6 +3112,7 @@ let recognitionRunning = false;
 let recognitionStartPending = false;
 let voiceCommandPending = false;
 let pendingStopConfirmation = false;
+let waitingForWakeWord = true;
 let restartTimer = null;
 let restartAttempts = 0;
 const SpeechRecognition =
@@ -3258,57 +3259,155 @@ restartHandsFreeListening = (delay = 500) => {
     $("voiceStatus").textContent = "◈ Micrófono: escuchando";
   };
 
-  recognition.onresult = async event => {
-    const result = event.results[event.resultIndex];
+recognition.onresult = async event => {
+  const result = event.results[event.resultIndex];
 
-    if (!result || !result.isFinal) return;
+  if (!result || !result.isFinal) return;
 
-    const spokenText = result[0].transcript.trim();
+  const spokenText = result[0].transcript.trim();
+  if (!spokenText) return;
 
-    if (!spokenText) return;
+  const normalizedText = spokenText
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-    const normalizedText = spokenText
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
+  // COMANDO PARA DESCANSAR Y APAGAR EL MICRÓFONO
+  const stopCommand =
+    /^(?:jarvis )?descansa(?: jarvis)?$/i;
 
-    /* DETENER LA ESCUCHA POR VOZ */
-    const stopCommand =
-      /^(?:jarvis[\s,:-]*)?(?:detente|para|deja de escuchar|deten la escucha|detener la escucha|desactiva el modo manos libres|desactivar el modo manos libres|apaga la escucha)$/i;
+  if (
+    stopCommand.test(normalizedText) ||
+    normalizedText === "apaga el microfono"
+  ) {
+    addMessage("user", spokenText);
 
-    if (stopCommand.test(normalizedText)) {
-      addMessage("user", spokenText);
+    handsFreeMode = false;
+    waitingForWakeWord = true;
+    pendingStopConfirmation = true;
 
-      handsFreeMode = false;
-      pendingStopConfirmation = true;
+    clearTimeout(restartTimer);
+    updateHandsFreeButton();
 
-      clearTimeout(restartTimer);
-      updateHandsFreeButton();
+    recognition.stop();
+    return;
+  }
 
-      return;
-    }
+  // ESPERAR LA FRASE HOLA JARVIS
+  if (waitingForWakeWord) {
+    if (!normalizedText.includes("hola jarvis")) return;
 
-    $("command").value = spokenText;
+    addMessage("user", spokenText);
+
+    waitingForWakeWord = false;
     voiceCommandPending = true;
 
+    recognition.stop();
+
+    const horaActual = Number(
+      new Intl.DateTimeFormat("es-CO", {
+        hour: "2-digit",
+        hourCycle: "h23",
+        timeZone: "America/Bogota"
+      }).format(new Date())
+    );
+
+    let saludo;
+
+    if (horaActual >= 5 && horaActual < 12) {
+      saludo = "Buenos días, señor.";
+    } else if (horaActual >= 12 && horaActual < 18) {
+      saludo = "Buenas tardes, señor.";
+    } else {
+      saludo = "Buenas noches, señor.";
+    }
+
+    let resumenClima =
+      "No pude consultar el clima de Cali en este momento.";
+
     try {
-      await sendMessage();
+      const reporte = await getWeatherAnswer(
+        "¿Qué clima hace en Cali hoy?"
+      );
 
-      /* Evitar que aparezca el teclado del iPad */
-      $("command").blur();
+      if (reporte) {
+        const condicion = reporte.match(
+          /El estado del cielo será de ([^.]+)\./i
+        );
 
+        const maxima = reporte.match(
+          /Temperatura máxima:\s*([\d.]+)\s*°C/i
+        );
+
+        const minima = reporte.match(
+          /Temperatura mínima:\s*([\d.]+)\s*°C/i
+        );
+
+        const lluvia = reporte.match(
+          /Probabilidad máxima de lluvia:\s*(\d+)%/i
+        );
+
+        if (condicion) {
+          resumenClima =
+            "Hoy en Cali tendremos " + condicion[1] + ".";
+
+          if (maxima && minima) {
+            resumenClima +=
+              " La temperatura estará entre " +
+              minima[1] + " y " + maxima[1] + " grados.";
+          }
+
+          if (lluvia) {
+            resumenClima +=
+              " La probabilidad de lluvia es del " +
+              lluvia[1] + " por ciento.";
+          }
+        } else {
+          resumenClima = reporte;
+        }
+      }
     } catch (error) {
-      console.error("Error procesando la orden de voz:", error);
+      console.warn("Error consultando el clima:", error);
+    }
 
-    } finally {
+    const respuesta = saludo + " " + resumenClima;
+
+    addMessage("assistant", respuesta);
+
+    speak(respuesta, () => {
       voiceCommandPending = false;
 
-      if (handsFreeMode && !responseSpeaking) {
+      if (handsFreeMode) {
         scheduleHandsFreeRestart(500);
       }
+    });
+
+    return;
+  }
+
+  // PROCESAR LAS ÓRDENES DESPUÉS DEL SALUDO
+  $("command").value = spokenText;
+  voiceCommandPending = true;
+
+  try {
+    await sendMessage();
+    $("command").blur();
+
+  } catch (error) {
+    console.error("Error procesando la orden:", error);
+
+  } finally {
+    voiceCommandPending = false;
+    waitingForWakeWord = true;
+
+    if (handsFreeMode && !responseSpeaking) {
+      scheduleHandsFreeRestart(500);
     }
-  };
+  }
+};
 
   recognition.onerror = event => {
     recognitionStartPending = false;
@@ -3376,6 +3475,8 @@ restartHandsFreeListening = (delay = 500) => {
     }
 
     handsFreeMode = true;
+    waitingForWakeWord = true;
+voiceCommandPending = false;
     updateHandsFreeButton();
 
     setState("PREPARANDO MODO MANOS LIBRES...");
@@ -3404,8 +3505,11 @@ restartHandsFreeListening = (delay = 500) => {
 
 /* VOZ DE RESPUESTA DE JARVIS */
 
-function speak(text) {
-  if (!speakingEnabled || !("speechSynthesis" in window)) return;
+function speak(text, onFinished = null) {
+  if (!speakingEnabled || !("speechSynthesis" in window)) {
+    if (typeof onFinished === "function") onFinished();
+    return;
+  }
 
   const cleanText = text
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -3437,9 +3541,7 @@ function speak(text) {
       voice.lang.toLowerCase().includes("es")
     );
 
-    if (carlosVoice) {
-      utterance.voice = carlosVoice;
-    }
+    if (carlosVoice) utterance.voice = carlosVoice;
   }
 
   utterance.onstart = () => {
@@ -3450,20 +3552,23 @@ function speak(text) {
   utterance.onend = () => {
     responseSpeaking = false;
     setState("JARVIS LISTO");
-if (handsFreeMode && restartHandsFreeListening) {
-  restartHandsFreeListening(500);
-}
+
+    if (typeof onFinished === "function") {
+      onFinished();
+    } else if (handsFreeMode && restartHandsFreeListening) {
+      restartHandsFreeListening(500);
+    }
   };
 
   utterance.onerror = event => {
     responseSpeaking = false;
-
     console.error("Error de voz:", event.error);
-    setState("ERROR DE REPRODUCCIÓN DE VOZ");
 
-if (handsFreeMode && restartHandsFreeListening) {
-  restartHandsFreeListening(1000);
-}
+    if (typeof onFinished === "function") {
+      onFinished();
+    } else if (handsFreeMode && restartHandsFreeListening) {
+      restartHandsFreeListening(1000);
+    }
   };
 
   window.speechSynthesis.speak(utterance);
