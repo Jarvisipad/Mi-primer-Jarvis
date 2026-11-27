@@ -228,33 +228,80 @@ recognition.onend = () => {
     return;
   }
 
+  // SALUDO SEGÚN LA HORA DE COLOMBIA
   if (greetingPending) {
     greetingPending = false;
 
-    speak("A sus órdenes, señor.", () => {
+    const horaActual = Number(
+      new Intl.DateTimeFormat("es-CO", {
+        hour: "2-digit",
+        hourCycle: "h23",
+        timeZone: "America/Bogota"
+      }).format(new Date())
+    );
+
+    let saludo;
+
+    if (horaActual >= 5 && horaActual < 12) {
+      saludo = "Buenos días, señor.";
+    } else if (horaActual >= 12 && horaActual < 18) {
+      saludo = "Buenas tardes, señor.";
+    } else {
+      saludo = "Buenas noches, señor.";
+    }
+
+    updateStatus("JARVIS ACTIVADO");
+
+    speak(saludo, () => {
       if (!listeningRequested) return;
 
       recognition.continuous = false;
       mode = "command";
+      updateStatus("ESCUCHANDO TU INSTRUCCIÓN");
       startRecognition();
     });
 
     return;
   }
 
+  // PROCESAR LA INSTRUCCIÓN
   if (commandPending) {
     commandPending = false;
 
     const spokenCommand = commandText;
+
     resultText.textContent =
       "Instrucción reconocida: " + spokenCommand;
 
     commandText = "";
-    mode = "wake";
-    recognition.continuous = true;
 
     const normalizedCommand = normalize(spokenCommand);
 
+    // COMANDO PARA APAGAR EL MICRÓFONO
+    if (
+      normalizedCommand.includes("descansa jarvis") ||
+      normalizedCommand.includes("jarvis descansa") ||
+      normalizedCommand === "descansa"
+    ) {
+      listeningRequested = false;
+      clearTimeout(restartTimer);
+
+      mode = "wake";
+      startButton.disabled = false;
+      stopButton.disabled = true;
+
+      updateStatus("MICRÓFONO APAGADO");
+      resultText.textContent = "JARVIS ha entrado en reposo.";
+
+      speak("Entendido, señor. Apagando el micrófono.");
+
+      return;
+    }
+
+    mode = "wake";
+    recognition.continuous = true;
+
+    // CONSULTA DE LA HORA
     if (
       normalizedCommand.includes("que hora es") ||
       normalizedCommand.includes("dime la hora")
@@ -291,8 +338,6 @@ recognition.onend = () => {
     if (listeningRequested) startRecognition();
   }, 700);
 };
-
-}
 
 startButton.addEventListener("click", () => {
   if (!recognition) return;
