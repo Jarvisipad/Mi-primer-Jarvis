@@ -222,50 +222,76 @@ recognition.onerror = event => {
   }
 };
 
-  recognition.onend = () => {
-    if (!listeningRequested) {
-      updateStatus("Prueba detenida");
-      return;
-    }
+recognition.onend = () => {
+  if (!listeningRequested) {
+    updateStatus("Prueba detenida");
+    return;
+  }
 
-    if (greetingPending) {
-      greetingPending = false;
+  if (greetingPending) {
+    greetingPending = false;
 
-      speak("A sus órdenes, señor.", () => {
-        if (!listeningRequested) return;
+    speak("A sus órdenes, señor.", () => {
+      if (!listeningRequested) return;
 
-        recognition.continuous = false;
-        mode = "command";
-        startRecognition();
+      recognition.continuous = false;
+      mode = "command";
+      startRecognition();
+    });
+
+    return;
+  }
+
+  if (commandPending) {
+    commandPending = false;
+
+    const spokenCommand = commandText;
+    resultText.textContent =
+      "Instrucción reconocida: " + spokenCommand;
+
+    commandText = "";
+    mode = "wake";
+    recognition.continuous = true;
+
+    const normalizedCommand = normalize(spokenCommand);
+
+    if (
+      normalizedCommand.includes("que hora es") ||
+      normalizedCommand.includes("dime la hora")
+    ) {
+      const hora = new Intl.DateTimeFormat("es-CO", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "America/Bogota"
+      }).format(new Date());
+
+      updateStatus("JARVIS RESPONDIENDO...");
+
+      speak("Son las " + hora + ", señor.", () => {
+        if (listeningRequested) {
+          updateStatus("Esperando nuevamente: HOLA JARVIS");
+          startRecognition();
+        }
       });
 
-      return;
-    }
-
-    if (commandPending) {
-      commandPending = false;
-
-      resultText.textContent =
-        "Instrucción reconocida: " + commandText;
-
-      commandText = "";
-      mode = "wake";
-      recognition.continuous = true;
-
+    } else {
       updateStatus("Esperando nuevamente: HOLA JARVIS");
-
       startRecognition();
-      return;
     }
 
-    updateStatus("Reanudando escucha...");
+    return;
+  }
 
-    clearTimeout(restartTimer);
+  updateStatus("Reanudando escucha...");
 
-    restartTimer = setTimeout(() => {
-      if (listeningRequested) startRecognition();
-    }, 700);
-  };
+  clearTimeout(restartTimer);
+
+  restartTimer = setTimeout(() => {
+    if (listeningRequested) startRecognition();
+  }, 700);
+};
+
 }
 
 startButton.addEventListener("click", () => {
