@@ -204,19 +204,23 @@ if (!SpeechRecognition) {
     }
   };
 
-  recognition.onerror = event => {
-    updateStatus("Micrófono: " + event.error);
+recognition.onerror = event => {
+  updateStatus("Error de micrófono: " + event.error);
 
-    if (
-      event.error === "not-allowed" ||
-      event.error === "service-not-allowed" ||
-      event.error === "audio-capture"
-    ) {
-      listeningRequested = false;
-      startButton.disabled = false;
-      stopButton.disabled = true;
-    }
-  };
+  resultText.textContent =
+    "El navegador informó este error: " + event.error;
+
+  if (
+    event.error === "not-allowed" ||
+    event.error === "service-not-allowed" ||
+    event.error === "audio-capture"
+  ) {
+    listeningRequested = false;
+    clearTimeout(restartTimer);
+    startButton.disabled = false;
+    stopButton.disabled = true;
+  }
+};
 
   recognition.onend = () => {
     if (!listeningRequested) {
