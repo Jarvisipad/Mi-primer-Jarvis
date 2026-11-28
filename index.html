@@ -3740,10 +3740,34 @@ recognition.onresult = async event => {
       console.warn("No se pudo guardar el saludo:", error);
     }
 
-    speak(respuesta, () => {
+    // Liberar el ciclo de voz tanto al terminar el saludo como mediante
+    // un respaldo temporal: Safari/iOS puede no disparar siempre onend.
+    let wakeGreetingRecoveryDone = false;
+    let wakeGreetingFallbackTimer = null;
+
+    const resumeAfterWakeGreeting = () => {
+      if (wakeGreetingRecoveryDone) return;
+      wakeGreetingRecoveryDone = true;
+
+      if (wakeGreetingFallbackTimer !== null) {
+        clearTimeout(wakeGreetingFallbackTimer);
+        wakeGreetingFallbackTimer = null;
+      }
+
       voiceCommandPending = false;
-      if (handsFreeMode) scheduleHandsFreeRestart(500);
-    });
+      if (handsFreeMode) {
+        scheduleHandsFreeRestart(650);
+      }
+    };
+
+    speak(respuesta, resumeAfterWakeGreeting);
+
+    // Respaldo si el evento de fin de voz no llega. El programador de escucha
+    // espera a que speechSynthesis termine antes de abrir de nuevo el micrófono.
+    wakeGreetingFallbackTimer = setTimeout(
+      resumeAfterWakeGreeting,
+      3200
+    );
     return;
   }
 
