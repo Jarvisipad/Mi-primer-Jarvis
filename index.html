@@ -3569,8 +3569,9 @@ if (SpeechRecognition) {
       recognitionStartPending = false;
       console.warn("No se pudo iniciar el reconocimiento:", error);
 
-      if (error.name !== "InvalidStateError" && handsFreeMode) {
-        scheduleHandsFreeRestart(1500);
+      if (handsFreeMode) {
+        $("voiceStatus").textContent = "◈ Micrófono: reintentando activación...";
+        scheduleHandsFreeRestart(error.name === "InvalidStateError" ? 1200 : 1500);
       }
     }
   }
@@ -3778,7 +3779,9 @@ recognition.onresult = async event => {
     ) {
       handsFreeMode = false;
       clearTimeout(restartTimer);
+      clearTimeout(foregroundResumeTimer);
       updateHandsFreeButton();
+      $("voiceStatus").textContent = "◈ Micrófono: revisa el permiso del navegador (" + event.error + ")";
 
       setState("REVISAR PERMISO DEL MICRÓFONO");
     }
@@ -3817,38 +3820,76 @@ recognition.onresult = async event => {
     if (handsFreeMode) {
       handsFreeMode = false;
       clearTimeout(restartTimer);
+      clearTimeout(foregroundResumeTimer);
       updateHandsFreeButton();
 
-      if (recognitionRunning || recognitionStartPending) {
-        setState("TERMINANDO ESCUCHA...");
-      } else {
-        setState("MODO MANOS LIBRES DESACTIVADO");
+      try {
+        if (recognitionRunning || recognitionStartPending) recognition.stop();
+      } catch (error) {
+        console.warn("No se pudo detener el micrófono:", error);
       }
 
+      $("voiceStatus").textContent = "◈ Micrófono: desactivado";
+      setState("MODO MANOS LIBRES DESACTIVADO");
       return;
     }
 
+    // Importante en iPad/iPhone: iniciar el micrófono directamente desde el toque
+    // del usuario. No depender del evento onend de SpeechSynthesis para empezar a escuchar.
     handsFreeMode = true;
     voiceCommandPending = false;
+    clearTimeout(restartTimer);
     updateHandsFreeButton();
-
+    $("voiceStatus").textContent = "◈ Micrófono: solicitando escucha...";
     setState("PREPARANDO MODO MANOS LIBRES...");
-    // Una confirmación natural activa la voz del navegador; después comienza la escucha silenciosa.
-    speak("A tu disposición, señor.", () => {
-      if (handsFreeMode) startListeningSilently();
-    });
+    startRecognitionNow();
   });
 
-  /* REANUDAR AL VOLVER A JARVIS */
+  let foregroundResumeTimer = null;
+
+  function resumeHandsFreeAfterForeground() {
+    if (!handsFreeMode || document.hidden) return;
+
+    clearTimeout(foregroundResumeTimer);
+    clearTimeout(restartTimer);
+    $("voiceStatus").textContent = "◈ Micrófono: reactivando escucha...";
+
+    // iOS puede cerrar la sesión de reconocimiento al cambiar a otra aplicación.
+    // Esperamos a que la página vuelva al primer plano y limpiamos estados obsoletos.
+    foregroundResumeTimer = setTimeout(() => {
+      foregroundResumeTimer = null;
+      if (!handsFreeMode || document.hidden) return;
+
+      if (!busy) {
+        recognitionRunning = false;
+        recognitionStartPending = false;
+        voiceCommandPending = false;
+      }
+
+      if (!busy && !initializing) {
+        startListeningSilently();
+      }
+    }, 900);
+  }
+
+  /* PAUSAR AL SALIR Y RECUPERAR AL REGRESAR A J.E.M.A. */
   document.addEventListener("visibilitychange", () => {
-    if (
-      !document.hidden &&
-      handsFreeMode &&
-      !recognitionRunning
-    ) {
-      scheduleHandsFreeRestart(700);
+    if (document.hidden) {
+      clearTimeout(restartTimer);
+      clearTimeout(foregroundResumeTimer);
+      if (handsFreeMode && (recognitionRunning || recognitionStartPending)) {
+        try { recognition.stop(); } catch (error) {
+          console.warn("No se pudo pausar el micrófono:", error);
+        }
+      }
+      return;
     }
+
+    resumeHandsFreeAfterForeground();
   });
+
+  window.addEventListener("pageshow", resumeHandsFreeAfterForeground);
+  window.addEventListener("focus", resumeHandsFreeAfterForeground);
 
   updateHandsFreeButton();
 
