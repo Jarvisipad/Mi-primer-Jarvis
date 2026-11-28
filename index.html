@@ -10,7 +10,7 @@
 :root {
   --cyan:#42eaff;
   --blue:#168cff;
-  --bg:#030914;F
+  --bg:#030914;
   --panel:#09182b;
   --text:#d9f7ff;
   --muted:#719db5;
@@ -2881,13 +2881,26 @@ enviarWhatsApp: "JARVIS - WhatsApp Voz"
   window.location.href = url;
   return true;
 }
-function shouldExtractPersonalFacts(text) {
-  const normalized = String(text || "")
+function normalizePersonalText(text) {
+  return String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  return /\b(?:recuerda que|recuerdame que|me llamo|mi nombre es|mi color favorito es|mi dispositivo(?: principal)? es|mi proyecto(?: actual)? es|mi preferencia es|prefiero|me gusta|no me gusta|me encanta|trabajo como|mi trabajo es|estoy desarrollando|estoy construyendo|mi hija se llama|mi hijo se llama|mi esposa se llama|mi esposo se llama|mi madre se llama|mi padre se llama)\b/.test(normalized);
+function isExplicitMemoryRequest(text) {
+  const normalized = normalizePersonalText(text);
+  return /\b(?:guarda|guardar|guarde|almacena|almacenar|almacene|recuerda|recuerdame)\b.{0,100}\b(?:memoria|recuerdo)\b/.test(normalized)
+    || /\b(?:en mi memoria|en tu memoria|en su memoria|memoria permanente)\b/.test(normalized);
+}
+
+function shouldExtractPersonalFacts(text) {
+  const normalized = normalizePersonalText(text);
+  const explicitMemoryRequest = isExplicitMemoryRequest(text);
+  const personalFact = /\b(?:recuerda que|recuerdame que|me llamo|mi nombre es|mi color favorito es|mi dispositivo(?: principal)? es|mi proyecto(?: actual)? es|mi preferencia es|prefiero|me gusta|no me gusta|me encanta|trabajo como|mi trabajo es|estoy desarrollando|estoy construyendo|mi hija se llama|mi hijo se llama|mi esposa se llama|mi esposo se llama|mi madre se llama|mi padre se llama|vivo en|resido en|mi residencia(?: actual)? es|mi ciudad(?: actual)? es|mi domicilio(?: actual)? es|naci en|mi lugar de nacimiento es|mi ciudad natal es)\b/.test(normalized);
+  return explicitMemoryRequest || personalFact;
 }
 
 async function sendMessage() {
@@ -3058,12 +3071,14 @@ if (asksTraffic) {
       timeZone: "America/Bogota"
     }).format(new Date());
 
-    /* EXTRAER RECUERDOS SOLO CUANDO EL MENSAJE PARECE APORTAR UN HECHO PERSONAL */
+    /* EXTRAER Y VERIFICAR RECUERDOS PERSONALES */
+    const explicitMemoryRequest = isExplicitMemoryRequest(text);
+    let memoryExtraction = null;
     if (shouldExtractPersonalFacts(text)) {
       try {
-        await api("facts_extract", { content: text });
+        memoryExtraction = await api("facts_extract", { content: text });
       } catch (error) {
-        console.warn("No se pudo extraer el recuerdo:", error);
+        console.warn("No se pudo guardar el recuerdo:", error);
       }
     }
 
@@ -3105,6 +3120,14 @@ if (asksTraffic) {
   "Utiliza los recuerdos personales verificados que el servidor agregue al contexto. " +
   "Respeta las actualizaciones recientes y no inventes datos personales. " +
   "Si un dato personal no aparece en los recuerdos, reconoce que no lo tienes guardado.\n\n" +
+  "UBICACIÓN PERSONAL: residencia_actual significa la ciudad donde el usuario vive ahora. " +
+  "lugar_nacimiento significa únicamente dónde nació. Nunca confundas residencia con lugar de nacimiento ni deduzcas dónde vive por el lugar donde nació.\n\n" +
+  "ESTADO DE GUARDADO DE ESTA PETICIÓN: " +
+  (explicitMemoryRequest && Number(memoryExtraction?.saved || 0) > 0
+    ? "Cloudflare confirmó que el recuerdo personal indicado se guardó correctamente. Confírmalo con claridad y no digas que no puedes guardar memoria."
+    : explicitMemoryRequest
+      ? "No hay confirmación de que el recuerdo se haya guardado. No afirmes que está guardado; explica con honestidad que no se pudo confirmar."
+      : "No se ha solicitado guardar un recuerdo en este turno.") + "\n\n" +
 
   "FECHA Y HORA ACTUAL DE COLOMBIA: " +
   currentDateTime + ".\n" +
@@ -3392,25 +3415,21 @@ recognition.onresult = async event => {
     return;
   }
 
-// Procesar cualquier orden sin repetir "Hola JARVIS".
-$("command").value = spokenText;
-voiceCommandPending = true;
+  // Cualquier otra frase se procesa directamente: no hace falta repetir "Hola JARVIS".
+  $("command").value = spokenText;
+  voiceCommandPending = true;
 
-try {
-
-  await sendMessage();
-  $("command").blur();
-
-} catch (error) {
-  console.error("Error procesando la orden:", error);
-
-} finally {
-  voiceCommandPending = false;
-
-  if (handsFreeMode) {
-    scheduleHandsFreeRestart(900);
+  try {
+    await sendMessage();
+    $("command").blur();
+  } catch (error) {
+    console.error("Error procesando la orden:", error);
+  } finally {
+    voiceCommandPending = false;
+    if (handsFreeMode && !responseSpeaking) {
+      scheduleHandsFreeRestart(500);
+    }
   }
-}
 };
 
   recognition.onerror = event => {
