@@ -3134,6 +3134,80 @@ function normalizePersonalText(text) {
     .trim();
 }
 
+/* INTERPRETADOR DE ÓRDENES DIRECTAS
+   Ejecuta únicamente acciones que ya existen y están conectadas a Atajos o Mapbox.
+   Las preguntas informativas continúan hacia el motor de conversación. */
+function normalizeActionText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveDirectCommand(rawText) {
+  const normalized = normalizeActionText(rawText);
+  if (!normalized) return null;
+
+  // WhatsApp tiene prioridad sobre "abrir WhatsApp" para no ignorar el envío solicitado.
+  const hasWhatsApp = /\b(?:whatsapp|watsapp|wasap|guasap)\b/i.test(normalized);
+  const hasSendVerb = /\b(?:envia|enviar|enviale|manda|mandar|mandale|escribe|escribir|escribile)\b/i.test(normalized);
+  const hasMessageWord = /\b(?:mensaje|whatsapp|watsapp|wasap|guasap)\b/i.test(normalized);
+
+  if (hasWhatsApp && hasSendVerb && hasMessageWord) {
+    const recipientMatch = normalized.match(
+      /\b(?:al|a|para)\s+(?:(?:el|la)\s+)?(?:(?:contacto|persona)\s+)?(.+?)(?=\s+(?:y\s+(?:dile|escribele|escribile|cuentale|indicale|comunicale)|con\s+(?:el|este)?\s*(?:mensaje|texto)|diciendole|que\s+diga|(?:un|el|este|ese)\s+(?:mensaje|whatsapp)|mensaje\s+que\s+diga|texto\s+que\s+diga|el\s+mensaje\s+es|el\s+texto\s+es)\b|$)/i
+    );
+
+    let recipient = recipientMatch ? recipientMatch[1].trim() : "";
+    recipient = recipient
+      .replace(/\s+(?:(?:a\s+traves\s+de)|por|en|de)\s+(?:whatsapp|watsapp|wasap|guasap)$/i, "")
+      .replace(/[.!?]+$/g, "")
+      .trim();
+
+    if (!recipient || recipient.length > 80 || /\b(?:envia|enviar|manda|mandar|mensaje|whatsapp|abre|abrir|busca)\b/i.test(recipient)) {
+      return { type: "whatsapp_missing_contact" };
+    }
+
+    return { type: "send_whatsapp", recipient };
+  }
+
+  // Solo interpreta como orden una construcción imperativa; "¿cómo abro Safari?" es una pregunta.
+  const openPrefix = /^(?:(?:por favor|oye|hey)\s+)*(?:(?:quiero|necesito|puedes|podrias)\s+(?:que\s+)?)?(?:abre|abras|abrir|abreme|abrirme|inicia|inicies|iniciar|ejecuta|ejecutar|lanza|lanzar|muestra|mostrar)\s+/i;
+  if (!openPrefix.test(normalized)) return null;
+
+  const target = normalized.replace(openPrefix, "").trim();
+  const appDefinitions = [
+    { key: "safari", label: "Safari", aliases: ["safari", "navegador", "internet"] },
+    { key: "mapas", label: "Mapas", aliases: ["mapas", "mapa", "apple maps"] },
+    { key: "whatsapp", label: "WhatsApp", aliases: ["whatsapp", "watsapp", "wasap", "guasap"] }
+  ];
+
+  const foundApps = appDefinitions.filter(app =>
+    app.aliases.some(alias => new RegExp("\\b" + alias.replace(/\s+/g, "\\s+") + "\\b", "i").test(target))
+  );
+
+  if (foundApps.length > 1) {
+    return { type: "multiple_apps", apps: foundApps.map(app => app.label) };
+  }
+
+  let cleanTarget = target
+    .replace(/^(?:la|el|mi)\s+(?:aplicacion|app)(?:\s+de)?\s+/, "")
+    .replace(/^(?:el|mi)\s+navegador\s+/, "")
+    .replace(/^(?:la|el|mi)\s+/, "")
+    .replace(/\s+(?:por favor|porfa|ahora|ya|un momento)$/, "")
+    .trim();
+
+  const selectedApp = appDefinitions.find(app =>
+    app.aliases.some(alias => cleanTarget === alias)
+  );
+
+  if (!selectedApp) return null;
+  return { type: "open_app", app: selectedApp.key, label: selectedApp.label };
+}
+
 function isExplicitMemoryRequest(text) {
   const normalized = normalizePersonalText(text);
   return /\b(?:guarda|guardar|guarde|almacena|almacenar|almacene|recuerda|recuerdame)\b.{0,100}\b(?:memoria|recuerdo)\b/.test(normalized)
@@ -3151,44 +3225,50 @@ async function sendMessage() {
   const text = $("command").value.trim();
 
   if (!text || busy || initializing) return;
-  const comando = text.toLowerCase();
-  const solicitudWhatsApp = text.match(
-/(?:env[ií]a|enviar|manda|mandar)\s+(?:un\s+)?mensaje(?:\s+por\s+whatsapp|\s+de\s+whatsapp)?\s+a\s+(.+)/i
-);
+  const directCommand = resolveDirectCommand(text);
 
-if (solicitudWhatsApp) {
-  const contacto = solicitudWhatsApp[1].trim().replace(/[.!?]+$/, "");
+  if (directCommand) {
+    $("command").value = "";
+    addMessage("user", text);
 
-  if (!contacto) {
-    addMessage("assistant", "Dime a quién deseas enviar el mensaje.");
-    return;
+    if (directCommand.type === "multiple_apps") {
+      const answer = "Entendí que quieres abrir varias aplicaciones: " +
+        directCommand.apps.join(" y ") +
+        ". Para evitar que una apertura interrumpa la otra, dime cuál quieres abrir primero.";
+      addMessage("assistant", answer);
+      setState("ORDEN PENDIENTE DE CONFIRMACIÓN");
+      speak(answer);
+      return;
+    }
+
+    if (directCommand.type === "whatsapp_missing_contact") {
+      const answer = "Claro. ¿A qué contacto quieres enviar el mensaje por WhatsApp?";
+      addMessage("assistant", answer);
+      setState("FALTA EL DESTINATARIO");
+      speak(answer);
+      return;
+    }
+
+    if (directCommand.type === "send_whatsapp") {
+      const answer = "Iniciando el atajo de WhatsApp para " + directCommand.recipient +
+        ". Completa los pasos que te solicite el iPad.";
+      addMessage("assistant", answer);
+      setState("ABRIENDO WHATSAPP...");
+      ejecutarAtajoJarvis("enviarWhatsApp", directCommand.recipient);
+      return;
+    }
+
+    if (directCommand.type === "open_app") {
+      const shortcutKey = directCommand.app;
+      const answer = "Abriendo " + directCommand.label + ".";
+      addMessage("assistant", answer);
+      setState("ABRIENDO " + directCommand.label.toUpperCase() + "...");
+      ejecutarAtajoJarvis(shortcutKey);
+      return;
+    }
   }
 
   $("command").value = "";
-  addMessage("user", text);
-  addMessage("assistant", "Preparando un mensaje de WhatsApp para " + contacto + ".");
-
-  ejecutarAtajoJarvis("enviarWhatsApp", contacto);
-  return;
-}
-  $("command").value = "";
-if (comando.includes("abre safari")) {
-  ejecutarAtajoJarvis("safari");
-  addMessage("assistant", "Abriendo Safari.");
-  return;
-}
-
-if (comando.includes("abre mapas")) {
-  ejecutarAtajoJarvis("mapas");
-  addMessage("assistant", "Abriendo Mapas.");
-  return;
-}
-
-if (comando.includes("abre whatsapp")) {
-  ejecutarAtajoJarvis("whatsapp");
-  addMessage("assistant", "Abriendo WhatsApp.");
-  return;
-}
   busy = true;
   $("send").disabled = true;
   $("command").value = "";
@@ -3229,12 +3309,7 @@ if (pendingTrafficOrigin) {
     setState("J.E.M.A. LISTO");
     speak(routeResult.answer);
 
-    if (
-  routeResult.trafficStatus === "congestionado" ||
-  routeResult.trafficStatus === "muy congestionado"
-) {
-  showTrafficNavigationOptions(routeResult);
-}
+    showTrafficNavigationOptions(routeResult);
     pendingTrafficOrigin = null;
     return;
 
@@ -3248,14 +3323,18 @@ if (pendingTrafficOrigin) {
   }
 }
 
-const asksTraffic =
-  /\b(tráfico|trafico|tránsito|transito|congestión|congestion|congestionado|congestionada)\b/i.test(text);
+const normalizedRouteCommand = normalizeActionText(text);
+const asksTrafficDefinition = /^(?:que es|que significa|explica|define)\s+(?:el\s+)?trafico\b/.test(normalizedRouteCommand);
+const explicitRouteIntent = /\b(?:como llego|como llegar|llevame|navegame|navega|navegar|dirigeme|guiame)\b/.test(normalizedRouteCommand)
+  || /\b(?:ruta|navegacion)\s+(?:a|al|hacia|hasta)\b/.test(normalizedRouteCommand);
+const mentionsTraffic = /\b(?:trafico|transito|congestion|congestionado|congestionada)\b/.test(normalizedRouteCommand);
+const asksTraffic = !asksTrafficDefinition && (mentionsTraffic || explicitRouteIntent);
 
 if (asksTraffic) {
   try {
-    // Detectar si el usuario ya incluyó el destino en la misma frase
+    // Reconoce destinos incluidos en expresiones naturales como "llévame a", "cómo llego a" o "ruta hacia".
     const inlineDestMatch = text.match(
-      /\b(?:hacia|hasta|para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|a(?:l)?)\s+(.+)/i
+      /\b(?:hacia|hasta|para\s+ir\s+a(?:l)?|ir\s+a(?:l)?|como\s+llegar\s+a(?:l)?|como\s+llego\s+a(?:l)?|llevame\s+a(?:l)?|navega(?:r)?\s+(?:a(?:l)?|hasta)|dirigeme\s+a(?:l)?|guiame\s+a(?:l)?|a(?:l)?)\s+(.+)/i
     );
 
     if (inlineDestMatch && inlineDestMatch[1].trim().length > 2) {
@@ -3267,12 +3346,7 @@ if (asksTraffic) {
       setState("J.E.M.A. LISTO");
       speak(routeResult.answer);
 
-      if (
-        routeResult.trafficStatus === "congestionado" ||
-        routeResult.trafficStatus === "muy congestionado"
-      ) {
-        showTrafficNavigationOptions(routeResult);
-      }
+      showTrafficNavigationOptions(routeResult);
       pendingTrafficOrigin = null;
       return;
     }
