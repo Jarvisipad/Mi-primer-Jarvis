@@ -3320,7 +3320,6 @@ recognition.onresult = async event => {
     pendingStopConfirmation = true;
     clearTimeout(restartTimer);
     updateHandsFreeButton();
-    recognition.stop();
     return;
   }
 
