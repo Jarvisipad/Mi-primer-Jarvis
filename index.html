@@ -3462,7 +3462,7 @@ if (SpeechRecognition) {
   recognition.lang = "es-CO";
   recognition.continuous = false;
   recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+  recognition.maxAlternatives = 3;
 
   function updateHandsFreeButton() {
     $("voice").textContent = handsFreeMode
@@ -3568,7 +3568,20 @@ recognition.onresult = async event => {
   const result = event.results[event.resultIndex];
   if (!result || !result.isFinal) return;
 
-  const spokenText = result[0].transcript.trim();
+  // El reconocimiento puede transcribir J.E.M.A. como "gema", "yema" o "gemma".
+  // Revisamos varias alternativas del motor de voz antes de descartar el saludo.
+  const alternatives = Array.from(result).map(item => String(item.transcript || "").trim()).filter(Boolean);
+  const isWakeTranscript = value => {
+    const normalized = String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return /^(?:(?:oye|hey)\s+)?(?:hola\s+)?(?:jema|gema|yema|jemma|gemma|hema|jarvis|jarvi)(?:\s+hola)?$/i.test(normalized);
+  };
+  const spokenText = (alternatives.find(isWakeTranscript) || alternatives[0] || "").trim();
   if (!spokenText) return;
 
   const normalizedText = spokenText
@@ -3591,7 +3604,7 @@ recognition.onresult = async event => {
   }
 
   // Un saludo explícito puede iniciar un saludo breve; no es obligatorio para las demás órdenes.
-  const isWakeWord = /^(?:hola\s+(?:jema|jarvis|jarvi)|ola\s+(?:jema|jarvis)|(?:jema|jarvis)\s+hola)$/i.test(normalizedText);
+  const isWakeWord = isWakeTranscript(normalizedText);
   if (isWakeWord) {
     addMessage("user", spokenText);
     voiceCommandPending = true;
